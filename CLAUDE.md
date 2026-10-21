@@ -70,10 +70,11 @@ until this repo has the equivalent.
   index in label form, so the default validation of `oops.Host._read_index_rows()`, which
   compares every shared column, rejects every real pair. `GalileoSSI.from_index()` passes
   `validate=_INDEX_KEYS` to match rows on `VOLUME_ID` and `FILE_SPECIFICATION_NAME`
-  instead. Unless one is given, it searches for the supplement (`oops.Host.SUPPLEMENT`)
-  with `require_supplement=False`, so an index without one is read alone. Index values win
-  the merge, so the clock count stays in label form. `_read_index_rows()` is a classmethod
-  that raises `WrongHostError` for another host's index, so call it through `GalileoSSI`.
+  instead. Unless one is given, it reads the supplement beside the index
+  (`oops.Host.SUPPLEMENT`), which must exist: an index without one raises
+  `FileNotFoundError`. Index values win the merge, so the clock count stays in label
+  form. `_read_index_rows()` is a classmethod that raises `WrongHostError` for another
+  host's index, so call it through `GalileoSSI`.
   `oops.Host.from_index()` reads the rows itself with the default validation, so it still
   fails on any index whose supplement sits beside it.
 - The hosts apply the standard overrides through `oops.Host._apply_overrides()`, passing

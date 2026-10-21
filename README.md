@@ -69,7 +69,7 @@ obs = oops.Host.from_file('GO_0017/G1/GANYMEDE/C0349632100R.LBL')
 ```
 
 The host class can also be used directly. It reads a volume index together with the
-supplemental index beside it (here `GO_0017_supplemental_index.lbl`), if there is one:
+supplemental index beside it (here `GO_0017_supplemental_index.lbl`), which must exist:
 
 ```python
 from host_galileo import GalileoSSI

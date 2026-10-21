@@ -226,8 +226,7 @@ class GalileoSSI(oops.Host):
                 rows must name the same files in the same order as the index; where both
                 tables give a column, the index value is kept. If not specified, the
                 directory of `filepath` is searched for a file whose name matches except
-                that "_index" is replaced by "_supplemental_index" in upper or lower case,
-                and the index is read alone if there is none.
+                that "_index" is replaced by "_supplemental_index" in upper or lower case.
             row_dicts (list[dict[str, Any]], optional): A list of dictionaries, one per
                 row of the index. Include if `filepath` and `supplement` have already been
                 read. If provided, `supplement` is ignored.
@@ -292,6 +291,7 @@ class GalileoSSI(oops.Host):
             joined by a slash.
 
         Raises:
+            FileNotFoundError: If the supplement does not exist.
             oops.host.HostFormatError: If a row's time must come from the spacecraft clock
                 count and its FRAME_DURATION is not one of the SSI frame durations.
             oops.host.HostIndexError: If the supplement does not have the same number of
@@ -307,11 +307,10 @@ class GalileoSSI(oops.Host):
 
         # Read and filter the index table
         if row_dicts is None:
-            # A supplement named by the caller must exist; one found by searching need not
-            row_dicts = GalileoSSI._read_index_rows(
-                filepath, supplement=supplement or oops.Host.SUPPLEMENT,
-                require_supplement=supplement is not None, validate=_INDEX_KEYS,
-                pds3_options=pds3_options)
+            supplement = supplement or oops.Host.SUPPLEMENT
+            row_dicts = GalileoSSI._read_index_rows(filepath, supplement=supplement,
+                                                    validate=_INDEX_KEYS,
+                                                    pds3_options=pds3_options)
         row_dicts = oops.Host._filter_index_rows(row_dicts, filter)
 
         overrides = {

@@ -625,7 +625,7 @@ def test_host_from_file_dispatches_vicar_to_ssi(tmp_path: pathlib.Path) -> None:
 
 def test_from_file_rejects_other_hosts(tmp_path: pathlib.Path) -> None:
     path = write_pds3_image(tmp_path, SPACECRAFT_NAME='CASSINI ORBITER')
-    with pytest.raises(oops.host.UnknownHostError, match='unrecognized host'):
+    with pytest.raises(oops.host.WrongHostError, match='not a Galileo SSI PDS3 label'):
         GalileoSSI.from_file(path, astrometry=True)
 
 ##########################################################################################
@@ -739,15 +739,22 @@ def write_supplement(directory: pathlib.Path,
                        _SUPPLEMENT_COLUMNS, rows, **_INDEX_KEYWORDS)
 
 
+def write_volume(directory: pathlib.Path) -> pathlib.Path:
+    """Write the SSI index and its supplemental index; return the index label's path."""
+
+    write_supplement(directory)
+    return write_index(directory)
+
+
 def test_from_index_keeps_zero_exposures(tmp_path: pathlib.Path) -> None:
-    snapshots = GalileoSSI.from_index(write_index(tmp_path))
+    snapshots = GalileoSSI.from_index(write_volume(tmp_path))
     assert [obs.basename for obs in snapshots] == ['C0346405900R.LBL', 'C0349632100R.LBL',
                                                    'C0349632200R.LBL']
     assert snapshots[2].texp == 0.
 
 
 def test_from_index_rows(tmp_path: pathlib.Path) -> None:
-    snapshots = GalileoSSI.from_index(write_index(tmp_path))
+    snapshots = GalileoSSI.from_index(write_volume(tmp_path))
     assert [obs.filepath for obs in snapshots] == ['GO_0017/J0/OPNAV/C0346405900R.LBL',
                                                    'GO_0017/G1/GANYMEDE/C0349632100R.LBL',
                                                    'GO_0017/G1/GANYMEDE/C0349632200R.LBL']
@@ -757,9 +764,9 @@ def test_from_index_rows(tmp_path: pathlib.Path) -> None:
     assert snapshots[1].time[0] == pytest.approx(tdb_from_image_time() - 0.13125)
 
 
-def test_from_index_without_supplement_uses_the_full_fov(tmp_path: pathlib.Path) -> None:
-    snapshots = GalileoSSI.from_index(write_index(tmp_path))
-    assert all(obs.fov is GalileoSSI._FOVS['NONE'] for obs in snapshots)
+def test_from_index_requires_the_supplement_beside_it(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(FileNotFoundError, match=r'GO_0017_supplemental_index\.lbl'):
+        GalileoSSI.from_index(write_index(tmp_path))
 
 
 def test_from_index_with_supplement(tmp_path: pathlib.Path) -> None:
@@ -812,7 +819,7 @@ def test_from_index_rejects_a_short_supplement(tmp_path: pathlib.Path) -> None:
 
 
 def test_from_index_filter(tmp_path: pathlib.Path) -> None:
-    snapshots = GalileoSSI.from_index(write_index(tmp_path),
+    snapshots = GalileoSSI.from_index(write_volume(tmp_path),
                                       filter={'FILTER_NAME': 'VIOLET'})
     assert [obs.filter for obs in snapshots] == ['VIOLET']
 
@@ -825,13 +832,13 @@ def test_from_index_uses_given_rows(tmp_path: pathlib.Path) -> None:
 
 def test_from_index_fov_override(tmp_path: pathlib.Path) -> None:
     fov = oops.fov.FlatFOV((1.e-5, 1.e-5), (10, 10))
-    snapshots = GalileoSSI.from_index(write_index(tmp_path), fov=fov)
+    snapshots = GalileoSSI.from_index(write_volume(tmp_path), fov=fov)
     assert all(obs.fov is fov for obs in snapshots)
 
 
 def test_from_index_parallel(tmp_path: pathlib.Path) -> None:
     parallel = snapshot()
-    snapshots = GalileoSSI.from_index(write_index(tmp_path), parallel=parallel)
+    snapshots = GalileoSSI.from_index(write_volume(tmp_path), parallel=parallel)
     assert all(type(obs.frame) is oops.frame.Cmatrix for obs in snapshots)
     assert all(obs.frame.reference is parallel.frame for obs in snapshots)
 
