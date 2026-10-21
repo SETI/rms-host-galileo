@@ -18,7 +18,6 @@ import julian
 import oops
 import pytest
 import spicedb
-from oops.body import Body
 
 import host_galileo.oops._galileo as galileo_module
 from host_galileo.oops.ssi import GalileoSSI
@@ -237,7 +236,7 @@ def fake_spice(monkeypatch: pytest.MonkeyPatch) -> FakeSpice:
     monkeypatch.setattr(galileo_module, 'get_spice_filecache_prefix',
                         lambda: FakeFileCachePrefix(fake.retrieved))
     monkeypatch.setattr(oops.spice, 'load_leap_seconds', load_leap_seconds)
-    monkeypatch.setattr(Body, 'define_solar_system', staticmethod(define_solar_system))
+    monkeypatch.setattr(oops.Body, 'define_solar_system', staticmethod(define_solar_system))
     monkeypatch.setattr(oops.path, 'SpicePath', spice_path)
     monkeypatch.setattr(oops.frame, 'SpiceType1Frame', spice_type1_frame)
 
@@ -262,10 +261,10 @@ def ganymede_path(monkeypatch: pytest.MonkeyPatch) -> oops.Path:
     """A fixed path registered as GANYMEDE, with a Body of that name that a TrackerFrame
     can track; the Body registry is restored afterward."""
 
-    monkeypatch.setattr(Body, 'BODY_REGISTRY', dict(Body.BODY_REGISTRY))
+    monkeypatch.setattr(oops.Body, 'BODY_REGISTRY', dict(oops.Body.BODY_REGISTRY))
     path = oops.path.FixedPath((1.e9, 0., 0.), oops.Path.SSB, oops.Frame.J2000,
                                path_id='GANYMEDE')
-    Body('GANYMEDE', path, oops.Frame.J2000)
+    oops.Body('GANYMEDE', path, oops.Frame.J2000)
     return path
 
 
