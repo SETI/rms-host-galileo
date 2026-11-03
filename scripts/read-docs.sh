@@ -28,13 +28,19 @@ if [ ! -d "$DOCS_DIR" ]; then
     exit 1
 fi
 
-if [ ! -f "$VENV/bin/activate" ]; then
+# A virtualenv created by a native Windows Python keeps its scripts in Scripts/, not bin/.
+case "$(uname -s)" in
+    CYGWIN* | MINGW* | MSYS*) VENV_ACTIVATE="$VENV/Scripts/activate" ;;
+    *)                        VENV_ACTIVATE="$VENV/bin/activate" ;;
+esac
+
+if [ ! -f "$VENV_ACTIVATE" ]; then
     echo "Error: virtual environment not found at $VENV" >&2
     exit 1
 fi
 
 # shellcheck source=/dev/null
-source "$VENV/bin/activate"
+source "$VENV_ACTIVATE"
 
 echo "Building documentation (nitpicky, warnings treated as errors)..."
 make -C "$DOCS_DIR" html SPHINXOPTS="-W -n"

@@ -21,8 +21,10 @@ See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
    ```bash
    ./scripts/setup-venv.sh
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   source venv/bin/activate
    ```
+
+   The scripts are written for Linux and macOS. On Windows, clone the repository and run these commands inside [WSL](https://learn.microsoft.com/windows/wsl/install) (Windows Subsystem for Linux); they do not support a native Windows shell.
 
 ## Development Workflow
 
