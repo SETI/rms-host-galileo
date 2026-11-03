@@ -58,7 +58,8 @@ Every bug report MUST include:
 
 ## Traceback / Logs / Screenshots / Other Evidence
 [Paste full traceback, relevant log output, screenshots, or other relevant evidence
-here when available]
+here when available. Before publishing or attaching any of it, redact tokens,
+credentials, local paths, and personally identifiable information.]
 
 ## Additional Notes
 [Workarounds, frequency, related issues.]

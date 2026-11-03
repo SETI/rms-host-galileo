@@ -26,7 +26,7 @@ Execute all project checks (lint, typecheck, test, Markdown lint, docs) and fix 
 
 Run from **project root** with the project **virtual environment activated** (e.g. `source venv/bin/activate` or create a new venv and then `pip install -e ".[dev]"`).
 
-### Code (ruff, flake8, mypy, pytest, stubtest, pip-audit)
+### Code (ruff, flake8, mypy, pytest, pyroma, pip-audit)
 
 ```bash
 # Lint (ruff); `ruff format` is disabled because it would remove deliberate alignment
@@ -41,8 +41,8 @@ MYPYPATH=src python -m mypy tests
 # Tests (pytest; use -n auto for parallel when tests are independent)
 python -m pytest tests -q
 
-# The two published stubs match the runtime API
-python -m mypy.stubtest polymath --mypy-config-file pyproject.toml --allowlist .stubtest-allowlist
+# Packaging metadata (pyroma)
+python -m pyroma .
 
 # Known vulnerabilities in dependencies (pip-audit)
 python -m pip_audit --skip-editable
@@ -82,7 +82,7 @@ From project root:
 Options:
 
 - **Default**: Run code checks and docs (Sphinx + PyMarkdown) in parallel.
-- `-c, --code`: Only the code checks (ruff, flake8 continuation-line indent, mypy, pytest, stubtest, pip-audit).
+- `-c, --code`: Only the code checks (ruff, flake8 continuation-line indent, mypy, pytest, pyroma, pip-audit).
 - `-d, --docs`: Only the Sphinx build and the text checks (codespell, PyMarkdown).
 - `-m, --markdown`: Only the text checks; `--codespell` or `--pymarkdown` for one of them.
 - `-s, --sequential`: Run code and docs sequentially (easier to read output).
@@ -99,7 +99,7 @@ Check Progress:
 - [ ] Flake8 continuation-line indent (src, tests)
 - [ ] Mypy (tests)
 - [ ] Pytest (tests)
-- [ ] Stubtest (__init__.pyi, typedefs.pyi)
+- [ ] Pyroma (packaging metadata)
 - [ ] pip-audit (installed dependencies)
 - [ ] codespell (src, tests, docs, scripts, README, CONTRIBUTING)
 - [ ] PyMarkdown scan (docs/, .claude/, README, CONTRIBUTING)
@@ -181,7 +181,7 @@ All checks pass when:
 - `flake8 --select=E12,E13` → No output
 - `mypy` → Success: no issues found
 - `pytest` → All tests pass; coverage meets target if configured
-- `stubtest` → Success: no issues found
+- `pyroma .` → Exits 0 (prints its "Final rating")
 - `pip-audit` → No known vulnerabilities found
 - `codespell` → No misspellings reported
 - `pymarkdown scan` → No violations

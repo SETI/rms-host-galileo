@@ -44,6 +44,10 @@ def _load_table_impl(fcpath: FCPath) -> Table:
     ...
 ```
 
+The annotations above only illustrate the accepted and returned types. Code under
+`src/` carries no type annotations (see the `python` rule); state the parameter and
+return types in the docstring's `Parameters:` and `Returns:` sections instead.
+
 ## 2. Modules That Already Accept FCPath
 
 The following project / RMS modules accept `FCPath` directly. Pass the `FCPath`

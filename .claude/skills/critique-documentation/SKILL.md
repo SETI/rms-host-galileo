@@ -145,7 +145,7 @@ Produce a single markdown report with the following structure. Do **not** edit a
 1. **Inventory rules:** List which of `.claude/rules/doc_python.md` and `.claude/skills/doc-*/SKILL.md` exist. Critique only against those; record which are absent so their checklist areas are skipped.
 2. **Gather docs:** List the README and `docs/` tree (note the `toctree` structure and which pages are user guide vs. developer guide vs. how-to vs. API reference). Read `docs/conf.py`.
 3. **Build:** Run `sphinx-build -W -b html docs <out>` and `sphinx-build -n -b html docs <out>` (or the project's documented build) and capture warnings. If the docs cannot be built in this environment, say so and critique statically.
-4. **Read:** Sample the README, each guide landing page and representative chapters, a how-to, and a cross-section of docstrings. Grep for stale references, bare API symbols in prose, and time-anchored phrasing.
+4. **Read:** Read all documentation in scope: the README, every guide landing page and chapter, every how-to, and the docstrings of every public module, class, method, and function. If the full scope cannot be read, read a representative sample and list the files sampled under **Scope** in the report, so it does not imply complete coverage. Grep for stale references, bare API symbols in prose, and time-anchored phrasing.
 5. **Classify:** For each checklist area (1-9), note specific files, sections, and line references or short quotes, and cite the supporting doc rule.
 6. **Write:** Produce the full report in the format above, including the "Prompt for an AI agent" section at the end.
 7. **Do not:** Change, add, or remove any line in any documentation, source, or config file.

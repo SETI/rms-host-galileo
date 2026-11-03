@@ -30,7 +30,7 @@ Use this when you need concrete examples for a dimension or wording guidance.
 
 ### Types
 
-- **Finding**: Public API in `api.py` has no return type annotations; mypy is not run in CI. **Evidence**: `pyproject.toml` has no `[tool.mypy]`; `api.py` functions lack `->`. **Suggestion**: Add mypy to CI, enable strict mode, and annotate public functions first.
+- **Finding**: Public API in `api.py` has no return type annotations; mypy is not run in CI. **Evidence**: `pyproject.toml` has no `[tool.mypy]`; `api.py` functions lack `->`. **Suggestion**: Add mypy to CI, enable strict mode, and annotate public functions first. (Only where the project's rules call for annotations in that path; where `python.md` forbids them, as under `src/`, check that the docstrings state the parameter and return types instead.)
 
 ### Testing
 

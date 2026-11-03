@@ -33,7 +33,7 @@ Compare against project rules when present (e.g. `.claude/rules/python.md`). Che
 - Naming (builtin shadowing, private `_` prefix, ALL_CAPS for module-level constants).
 - Explicit checks vs exception-based control flow; falsy checks (`is None`, `len(x) == 0`).
 - Imports: top of file, grouped and sorted; no wildcard imports.
-- Function shape: ≤3 positional args, keyword-only for the rest. Return an object rather than a tuple of many results.
+- Function shape: positional parameters form one logical group, usually at most three, but four or five are fine when they belong together (e.g. `self, pos_x, pos_y, pos_z`); optional and configuration parameters are keyword-only. Do not flag such a group of four or five, or suggest splitting it with `*`. Return an object rather than a tuple of many results.
 - Constants: no magic numbers/strings; config or env for tunables.
 - Error handling: narrow try/except; no bare except; logging over print in libraries.
 - Public API: clear `__all__`, `py.typed` for typed packages, separation of public vs `_private`.
@@ -45,7 +45,7 @@ Compare against project rules when present (e.g. `.claude/rules/python.md`). Che
 
 ### 3. Types and static checks
 
-- Type coverage: annotations on public API and new code; use of `Any`, untyped defs.
+- Type coverage: follow the project's path-specific annotation policy. Where `python.md` forbids annotations (e.g. under `src/`, apart from inline property return annotations), do not recommend adding them; check instead that docstrings state every parameter and return type, and flag annotations that break the rule. Where annotations are required (e.g. tests) or the project sets no policy, check annotations on public API and new code, use of `Any`, and untyped defs.
 - Mypy (or equivalent): strictness, per-file overrides, global ignores.
 - Linting: Ruff/Flake8/Pylint enabled; which rules; consistent formatting (e.g. Ruff format / Black).
 - Docstrings: presence, format (e.g. Google), consistency with signatures and behavior.
@@ -56,7 +56,7 @@ Compare against project rules when present (e.g. `.claude/rules/python.md`). Che
 
 - Structure: tests colocated or in `tests/`; mirror of source layout; naming (`test_*`).
 - Coverage: approximate line/branch coverage; untested modules or critical paths.
-- Quality: one assertion per test; no tests that ignore results or swallow exceptions; use of parametrize/fixtures; independence and parallelizability.
+- Quality: one behavior per test, and one condition per assertion (no `and` joining two checks); no tests that ignore results or swallow exceptions; use of parametrize/fixtures; independence and parallelizability.
 - Gaps: missing edge cases, error paths, or integration tests for key flows.
 
 **Evidence**: `pytest.ini`/`pyproject.toml`, coverage report or commands, example test file.

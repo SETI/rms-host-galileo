@@ -37,7 +37,7 @@ Closes #<!-- issue number -->
 
 ## Checklist
 
-- [ ] Code follows project style (`ruff check`, `ruff format`)
+- [ ] Code follows project style (`ruff check`)
 - [ ] Type annotations present and `mypy` passes
 - [ ] No secrets or credentials committed
 - [ ] No warnings or errors introduced (CI, linters, type checking, builds) or justified in Notes
