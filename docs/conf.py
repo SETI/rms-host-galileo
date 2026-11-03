@@ -5,6 +5,7 @@
 # -- Path setup --------------------------------------------------------------
 
 import datetime
+import importlib
 import importlib.metadata
 import os
 import sys
@@ -25,11 +26,19 @@ project = 'rms-host-galileo'
 copyright = f'{datetime.date.today().year}, SETI Institute'
 author = 'SETI Institute'
 
-# The full version, including alpha/beta/rc tags
+# The full version, including alpha/beta/rc tags. Without an installed distribution, fall
+# back to the _version.py that setuptools_scm writes into the source tree on any build or
+# install; never substitute a made-up version.
 try:
     release = importlib.metadata.version('rms-host-galileo')
 except importlib.metadata.PackageNotFoundError:
-    release = '1.0.0'  # fallback for development
+    try:
+        release = importlib.import_module('host_galileo._version').version
+    except ImportError as e:
+        raise RuntimeError('Cannot determine the rms-host-galileo version: the package '
+                           'is not installed and src/host_galileo/_version.py does not '
+                           'exist. Run `pip install -e .` (or '
+                           'scripts/setup-venv.sh) first.') from e
 
 # -- General configuration ---------------------------------------------------
 

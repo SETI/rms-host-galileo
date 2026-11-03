@@ -156,6 +156,8 @@ class GalileoSSI(oops.Host):
             oops.host.VicarHostError: If the VICAR header cannot be parsed.
             oops.host.HostFormatError: If the time must come from the spacecraft clock
                 count and FRAME_DURATION is not one of the SSI frame durations.
+            oops.host.WrongHostError: If `fileinfo` is not a Galileo SSI PDS3 label or
+                VICAR image.
             OSError: If the file cannot be read.
         """
 
@@ -649,7 +651,8 @@ class GalileoSSI(oops.Host):
         _Galileo.load_instruments(asof=asof)
 
         # Load the instrument kernel
-        GalileoSSI._INSTRUMENT_KERNEL = _Galileo.spice_instrument_kernel('SSI')[0]
+        GalileoSSI._INSTRUMENT_KERNEL = _Galileo.spice_instrument_kernel('SSI',
+                                                                         asof=asof)[0]
 
         # Construct the FOVs
         info = GalileoSSI._INSTRUMENT_KERNEL['INS'][_NAIF_ID]

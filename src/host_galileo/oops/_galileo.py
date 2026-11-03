@@ -371,7 +371,7 @@ class _Galileo:
 
         # Furnish instruments and frames; Note GLL has no frame kernel
         spicedb.open_db()
-        _ = spicedb.furnish_inst(-77, inst=instruments, asof=asof)
+        _ = spicedb.furnish_inst(_Galileo.SPACECRAFT_ID, inst=instruments, asof=asof)
         spicedb.close_db()
 
         _Galileo.loaded_instruments += instruments
@@ -401,7 +401,8 @@ class _Galileo:
             asof = julian.ymdhms_format_from_day_sec(day, sec)
 
         spicedb.open_db()
-        kernel_info = spicedb.select_inst(-77, types='IK', inst=inst, asof=asof)
+        kernel_info = spicedb.select_inst(_Galileo.SPACECRAFT_ID, types='IK', inst=inst,
+                                          asof=asof)
         spicedb.furnish_kernels(kernel_info, fast=True)
         spicedb.close_db()
 
@@ -460,7 +461,7 @@ class _Galileo:
             types = [t for t in spicedb.KERNEL_TYPE_SORT_ORDER if t != 'CK']
 
         # Return the relevant used kernels
-        return spicedb.used_basenames(types=types, time=time, inst=inst, sc=-77,
-                                      bodies=bodies)
+        return spicedb.used_basenames(types=types, time=time, inst=inst,
+                                      sc=_Galileo.SPACECRAFT_ID, bodies=bodies)
 
 ##########################################################################################

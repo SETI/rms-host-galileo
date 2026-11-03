@@ -247,6 +247,7 @@ def test_initialize_loads_the_mission(fake_spice: FakeSpice,
     assert GalileoSSI._INSTRUMENT_KERNEL is fake_spicedb.kernel_dict
     assert fake_spice.furnished[0] == 'Galileo/SCLK/mk00062a.tsc'
     assert GalileoSSI._initialized
+    assert fake_spicedb.named('select_inst')[0][1]['asof'] == '2000-01-01T00:00:00'
 
 
 def test_initialize_rejects_an_unexpected_image_shape(fake_spicedb: FakeSpiceDB) -> None:
