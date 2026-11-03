@@ -40,7 +40,8 @@ def test_months_span_the_mission() -> None:
 ##########################################################################################
 
 
-def test_initialize_defines_the_solar_system_and_spacecraft(fake_spice: FakeSpice) -> None:
+def test_initialize_defines_the_solar_system_and_spacecraft(
+        fake_spice: FakeSpice) -> None:
     _Galileo.initialize(planets=[5], asof='2000-01-01', irregulars=False)
     assert fake_spice.solar_system == [(('1989-10-18', '2003-09-21'),
                                         {'asof': '2000-01-01', 'planets': [5],
@@ -154,9 +155,11 @@ def test_initialize_kernels_clips_to_the_mission() -> None:
 ##########################################################################################
 
 
-def test_load_instruments_includes_ssi_on_the_first_call(fake_spicedb: FakeSpiceDB) -> None:
+def test_load_instruments_includes_ssi_on_the_first_call(
+        fake_spicedb: FakeSpiceDB) -> None:
     _Galileo.load_instruments()
-    assert fake_spicedb.named('furnish_inst') == [((-77,), {'inst': ['SSI'], 'asof': None})]
+    expected = [((-77,), {'inst': ['SSI'], 'asof': None})]
+    assert fake_spicedb.named('furnish_inst') == expected
     assert _Galileo.loaded_instruments == ['SSI']
 
 

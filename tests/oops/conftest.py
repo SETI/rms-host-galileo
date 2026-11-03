@@ -221,7 +221,8 @@ def fake_spice(monkeypatch: pytest.MonkeyPatch) -> FakeSpice:
 
     def spice_type1_frame(frame_id: str, tick_tolerance: int) -> oops.Frame:
         fake.type1_frames.append((frame_id, tick_tolerance))
-        return oops.frame.Cmatrix(oops.Matrix3.IDENTITY, oops.Frame.J2000, frame_id=frame_id)
+        return oops.frame.Cmatrix(oops.Matrix3.IDENTITY, oops.Frame.J2000,
+                                  frame_id=frame_id)
 
     def gdpool(name: str, start: int) -> list[float]:
         return _GDPOOL[name][start:]
@@ -236,7 +237,8 @@ def fake_spice(monkeypatch: pytest.MonkeyPatch) -> FakeSpice:
     monkeypatch.setattr(galileo_module, 'get_spice_filecache_prefix',
                         lambda: FakeFileCachePrefix(fake.retrieved))
     monkeypatch.setattr(oops.spice, 'load_leap_seconds', load_leap_seconds)
-    monkeypatch.setattr(oops.Body, 'define_solar_system', staticmethod(define_solar_system))
+    monkeypatch.setattr(oops.Body, 'define_solar_system',
+                        staticmethod(define_solar_system))
     monkeypatch.setattr(oops.path, 'SpicePath', spice_path)
     monkeypatch.setattr(oops.frame, 'SpiceType1Frame', spice_type1_frame)
 

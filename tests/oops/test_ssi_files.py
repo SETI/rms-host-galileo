@@ -84,7 +84,8 @@ def test_exposure_matches_the_label(source: str) -> None:
 
 @pytest.mark.parametrize('source', SOURCES)
 def test_fov_shape_matches_the_label(source: str) -> None:
-    assert load(source).fov.uv_shape.vals.tolist() == load('LBL').fov.uv_shape.vals.tolist()
+    expected = load('LBL').fov.uv_shape.vals.tolist()
+    assert load(source).fov.uv_shape.vals.tolist() == expected
 
 
 @pytest.mark.parametrize('source', SOURCES)

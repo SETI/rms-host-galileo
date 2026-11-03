@@ -13,6 +13,7 @@ from typing import Any, cast
 import julian
 import numpy as np
 import oops
+from pdsparser import Pds3Label
 import pytest
 import vicar
 from conftest import (SSI_DISTORTION, SSI_FOCAL_LENGTH, SSI_PIXEL_SIZE, SSI_PIXELS,
@@ -194,12 +195,14 @@ def test_unknown_attribute() -> None:
 
 
 @pytest.mark.parametrize(('label', 'expected'), [
-    ({'SPACECRAFT_NAME': 'GALILEO ORBITER', 'INSTRUMENT_NAME': 'SOLID STATE IMAGING SYSTEM'},
-     True),
-    ({'SPACECRAFT_NAME': 'GALILEO ORBITER', 'INSTRUMENT_NAME': 'SOLID_STATE_IMAGING'}, True),
-    ({'SPACECRAFT_NAME': 'GALILEO ORBITER', 'INSTRUMENT_NAME': 'NEAR INFRARED MAPPING'},
-     False),
-    ({'SPACECRAFT_NAME': 'CASSINI ORBITER', 'INSTRUMENT_NAME': 'SOLID STATE IMAGING'}, False),
+    ({'SPACECRAFT_NAME': 'GALILEO ORBITER',
+      'INSTRUMENT_NAME': 'SOLID STATE IMAGING SYSTEM'}, True),
+    ({'SPACECRAFT_NAME': 'GALILEO ORBITER',
+      'INSTRUMENT_NAME': 'SOLID_STATE_IMAGING'},        True),
+    ({'SPACECRAFT_NAME': 'GALILEO ORBITER',
+      'INSTRUMENT_NAME': 'NEAR INFRARED MAPPING'},      False),
+    ({'SPACECRAFT_NAME': 'CASSINI ORBITER',
+      'INSTRUMENT_NAME': 'SOLID STATE IMAGING'},        False),
     ({}, False),
 ], ids=['spaces', 'underscores', 'other-instrument', 'other-spacecraft', 'empty'])
 def test_detect_in_pds3(label: dict[str, str], expected: bool) -> None:
@@ -244,16 +247,17 @@ def test_initialize_loads_the_mission(fake_spice: FakeSpice,
     GalileoSSI.initialize(planets=[5], asof='2000-01-01')
     assert fake_spice.solar_system[0][1]['planets'] == [5]
     assert fake_spicedb.named('furnish_inst')[0][1]['inst'] == ['SSI']
+    assert fake_spicedb.named('select_inst')[0][1]['asof'] == '2000-01-01T00:00:00'
     assert GalileoSSI._INSTRUMENT_KERNEL is fake_spicedb.kernel_dict
     assert fake_spice.furnished[0] == 'Galileo/SCLK/mk00062a.tsc'
     assert GalileoSSI._initialized
-    assert fake_spicedb.named('select_inst')[0][1]['asof'] == '2000-01-01T00:00:00'
 
 
 def test_initialize_rejects_an_unexpected_image_shape(fake_spicedb: FakeSpiceDB) -> None:
     fake_spicedb.kernel_dict['INS'][-77036]['MAX_LINE'] = 400
     with pytest.raises(oops.host.HostError,
-                       match=r'unsupported SSI image shape \(800, 400\) in the SSI kernel'):
+                       match=r'unsupported SSI image shape \(800, 400\) '
+                             r'in the SSI kernel'):
         GalileoSSI.initialize()
 
 
@@ -279,7 +283,8 @@ def test_full_fov_distortion_coefficients() -> None:
     # The kernel's coefficient applies to distances in pixels; the FOV's, in radians
     fov = GalileoSSI._FOVS['FULL']
     scale = SSI_PIXEL_SIZE / SSI_FOCAL_LENGTH
-    assert list(fov.coefft_uv_from_xy) == pytest.approx([1., 0., SSI_DISTORTION / scale**2])
+    expected = [1., 0., SSI_DISTORTION / scale**2]
+    assert list(fov.coefft_uv_from_xy) == pytest.approx(expected)
 
 
 @pytest.mark.usefixtures('initialized_ssi')
@@ -523,7 +528,8 @@ def test_from_file_pds3(tmp_path: pathlib.Path) -> None:
 
 
 def test_from_file_reads_the_window_in_label_order(tmp_path: pathlib.Path) -> None:
-    obs = GalileoSSI.from_file(write_pds3_image(tmp_path, CUT_OUT_WINDOW=[1, 2, 300, 200]))
+    path = write_pds3_image(tmp_path, CUT_OUT_WINDOW=[1, 2, 300, 200])
+    obs = GalileoSSI.from_file(path)
     assert obs.data.shape == (300, 200)
     assert obs.data[0, 0] == image_array()[0, 1]
 
@@ -604,7 +610,6 @@ def test_from_file_vicar_reads_its_own_header(tmp_path: pathlib.Path) -> None:
 
 
 def test_from_file_accepts_a_parsed_label(tmp_path: pathlib.Path) -> None:
-    from pdsparser import Pds3Label
     label = Pds3Label(write_pds3_image(tmp_path))
     assert GalileoSSI.from_file(label).data.shape == (399, 392)
 
@@ -711,7 +716,8 @@ def write_table(directory: pathlib.Path, name: str, object_name: str,
             start += width + 3
         elif kind == 'ASCII_INTEGER':
             text += [f'    START_BYTE = {start}', f'    BYTES = {4 * width + 3}',
-                     '    ITEMS = 4', f'    ITEM_BYTES = {width}', f'    ITEM_OFFSET = {width + 1}']
+                     '    ITEMS = 4', f'    ITEM_BYTES = {width}',
+                     f'    ITEM_OFFSET = {width + 1}']
             start += 4 * (width + 1)
         else:
             text += [f'    START_BYTE = {start}', f'    BYTES = {width}']
@@ -736,8 +742,9 @@ def write_supplement(directory: pathlib.Path,
                      rows: list[tuple[Any, ...]] = _SUPPLEMENT_ROWS) -> pathlib.Path:
     """Write the supplemental index for :func:`write_index`; return its label's path."""
 
-    return write_table(directory, 'GO_0017_supplemental_index', 'SUPPLEMENTAL_INDEX_TABLE',
-                       _SUPPLEMENT_COLUMNS, rows, **_INDEX_KEYWORDS)
+    return write_table(directory, 'GO_0017_supplemental_index',
+                       'SUPPLEMENTAL_INDEX_TABLE', _SUPPLEMENT_COLUMNS, rows,
+                       **_INDEX_KEYWORDS)
 
 
 def write_volume(directory: pathlib.Path) -> pathlib.Path:
@@ -797,8 +804,8 @@ def test_from_index_requires_a_named_supplement(tmp_path: pathlib.Path) -> None:
 
 def test_from_index_rejects_another_host(tmp_path: pathlib.Path) -> None:
     path = write_table(tmp_path, 'GO_0017_index', 'IMAGE_INDEX_TABLE', _INDEX_COLUMNS,
-                       _INDEX_ROWS, MISSION_NAME='CASSINI', INSTRUMENT_HOST_NAME='CASSINI',
-                       INSTRUMENT_ID='ISS')
+                       _INDEX_ROWS, MISSION_NAME='CASSINI',
+                       INSTRUMENT_HOST_NAME='CASSINI', INSTRUMENT_ID='ISS')
     with pytest.raises(oops.host.WrongHostError, match='not a Galileo SSI index'):
         GalileoSSI.from_index(path)
 

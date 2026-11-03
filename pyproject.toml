@@ -164,10 +164,6 @@ extend-ignore = ["PT011", "SIM105", "SIM108", "I001", "RUF005"]
 ignorelist = ["filter"]
 
 [tool.ruff.lint.per-file-ignores]
-# E501: test files are exempt from the line length limit so that expected-value
-#   tables can stay aligned and readable.
-"tests/*" = ["E501"]
-
 # A001: Sphinx reads the project's copyright from a module variable named `copyright`.
 "docs/conf.py" = ["A001"]
 
