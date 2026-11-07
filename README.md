@@ -44,13 +44,6 @@ be installed with:
 pip install rms-host-galileo
 ```
 
-The host needs the `oops.Host` interface, which is not yet in a released version of
-`rms-oops`. Until it is, install `rms-oops` from its development branch:
-
-```sh
-pip install "rms-oops @ git+https://github.com/SETI/rms-oops@mrs_260925_host_reorg"
-```
-
 Geometry calculations need the Galileo SPICE kernels. The host reads a fixed set of them
 through the SPICE file cache of `spicedb`, located by the `SPICE_PATH` environment
 variable (or `$OOPS_RESOURCES/SPICE`), and the SSI instrument kernel through the kernel
