@@ -14,24 +14,31 @@ it, are the authoritative coding, testing, documentation, dependency and environ
 standards. The repo layout, CI and scripts come from `rms-devenv/repo_template`, adapted as
 rms-polymath adapted them, by way of `rms-host-cassini`. Model changes to packaging, CI or
 scripts on rms-polymath's `pyproject.toml`, `.flake8`, `.github/workflows/` and `scripts/`,
-and keep them in step with rms-host-cassini. Some details in the rules are
-polymath-specific, for example the two published `.pyi` stubs and `stubtest`. Ignore those
-until this repo has the equivalent.
+and keep them in step with rms-host-cassini. The rules' references to the two published
+`.pyi` stubs and `stubtest` apply here to the stubs described below.
 
 - Hand-aligned columns (assignments, dict colons, `from x     import`) are deliberate. Never
   run `ruff format` or any other auto-formatter.
 - Keep the file banners: a line of 90 `#` characters at the top and bottom of each module,
-  with a `# host_galileo/<file>.py` header.
+  with a `# host_galileo/<file>.py` header (`.pyi` for a stub).
 
 ## Current state
 
 - `scripts/run-all-checks.sh` is the single source of truth for the checks: ruff, flake8
-  `E12`/`E13`, mypy on `tests/`, pytest, pyroma, pip-audit, the Sphinx build (`-W -n`),
-  codespell and PyMarkdown. `ruff format` is disabled. `.github/workflows/run-tests.yml`
-  runs the same set. `scripts/setup-venv.sh` builds the `venv/` that the scripts expect;
-  set `VENV` to use another.
+  `E12`/`E13`, mypy on `tests/`, pytest, pyroma, stubtest, pip-audit, the Sphinx build
+  (`-W -n`), codespell and PyMarkdown. `ruff format` is disabled.
+  `.github/workflows/run-tests.yml` runs the same set. `scripts/setup-venv.sh` builds the
+  `venv/` that the scripts expect; set `VENV` to use another.
 - The `oops.Host` API first appears in rms-oops 0.4.0, the minimum version in
   `pyproject.toml`.
+- The type information is published in two stubs: `host_galileo/__init__.pyi` declares
+  `GalileoSSI` in full, and `host_galileo/oops/__init__.pyi` re-exports it. `stubtest`
+  checks them against the runtime in the check script and in CI, so adding, renaming or
+  re-signing a public member means updating `host_galileo/__init__.pyi` in the same
+  change. The `[tool.mypy] exclude`, the override list in `pyproject.toml` and
+  `.stubtest-allowlist` keep it off the stub-less modules. The two `type: ignore[override]`
+  comments are real mismatches with `oops.Host`: `from_file` names its first parameter
+  `fileinfo`, and `from_index` returns `list[Snapshot]`.
 - `docs/conf.py` resolves the short class names in docstrings (`FCPath`, `Observation`,
   ...) through intersphinx with `_SHORT_NAMES`. Add a name there when a nitpicky build
   reports a class from another RMS package.

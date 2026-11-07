@@ -59,6 +59,13 @@ jobs:
         run: |
           pyroma .
 
+      # The two published stubs, the __init__.pyi of host_galileo and of host_galileo.oops,
+      # must keep describing the runtime API. The allowlist accepts only the deliberate
+      # absence of a stub for the internal ssi module.
+      - name: Stubtest
+        run: |
+          python -m mypy.stubtest host_galileo --mypy-config-file pyproject.toml --allowlist .stubtest-allowlist
+
       # -W makes warnings errors and -n (nitpicky) makes a cross-reference with no
       # target one of them.
       - name: Sphinx
