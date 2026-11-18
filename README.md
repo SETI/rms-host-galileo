@@ -76,14 +76,24 @@ snapshots = GalileoSSI.from_index('GO_0017_index.lbl')
 - `GalileoSSI.from_file()` makes a `Snapshot` from an SSI image. The image and field of
   view are trimmed to the cutout window given in the label unless `full_fov=True`, and
   `astrometry=True` reads no image data.
-- The PDS3 label and the VICAR file of an image give the same times, field of view,
-  pointing, and data, and either way the `Snapshot` names the image file as its path.
+- Given the VICAR image file, the host reads only that file. Given the PDS3 label, it
+  also reads the image file that the label names, unless `astrometry=True`. The pixels
+  always come from the image file itself, so they are identical either way, and either
+  way the `Snapshot` names the image file as its path.
+- The metadata come from every label that was read: the PDS3 label and the header inside
+  the image file. Where both give a value, the two are merged: a rounded number gives way
+  to the more precise one, and otherwise the PDS3 label's value is kept. A value that no
+  label gives is left out rather than filled with a placeholder. The `dict` subfield
+  holds the merged values, and `label_dict` and `header_dict` hold each label as read.
+- Every difference between the two labels found in the archive, and every value that
+  only one of them gives, is recorded in
+  [issue #41](https://github.com/SETI/rms-host-galileo/issues/41).
 - `GalileoSSI.from_index()` makes one `Snapshot` for each row of a volume index,
-  including rows with a zero exposure. It merges in the columns of the supplemental
-  index, matching its rows to the index's by VOLUME_ID and FILE_SPECIFICATION_NAME.
-- The exposure is centered on the label's IMAGE_TIME. When the label gives none, the
-  time comes from the spacecraft clock count and the shutter delay for the frame
-  duration.
+  including rows with a zero exposure, named for the image file of the row. It merges in
+  the columns of the supplemental index, matching its rows to the index's by VOLUME_ID
+  and FILE_SPECIFICATION_NAME.
+- The exposure is centered on the image time. When no label gives one, the time comes
+  from the spacecraft clock count and the shutter delay for the frame duration.
 - A target named in the label is repaired where the label is known to be wrong, and an
   image of a star uses that star as its light source.
 

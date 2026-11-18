@@ -36,9 +36,10 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   checks them against the runtime in the check script and in CI, so adding, renaming or
   re-signing a public member means updating `host_galileo/__init__.pyi` in the same
   change. The `[tool.mypy] exclude`, the override list in `pyproject.toml` and
-  `.stubtest-allowlist` keep it off the stub-less modules. The two `type: ignore[override]`
-  comments are real mismatches with `oops.Host`: `from_file` names its first parameter
-  `fileinfo`, and `from_index` returns `list[Snapshot]`.
+  `.stubtest-allowlist` keep it off the stub-less modules (`_galileo.py`,
+  `_ssi_labels.py` and `ssi.py`). The two `type: ignore[override]` comments are real
+  mismatches with `oops.Host`: `from_file` names its first parameter `fileinfo`, and
+  `from_index` returns `list[Snapshot]`.
 - `docs/conf.py` resolves the short class names in docstrings (`FCPath`, `Observation`,
   ...) through intersphinx with `_SHORT_NAMES`. Add a name there when a nitpicky build
   reports a class from another RMS package.
@@ -65,24 +66,45 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   monthly CK/SPK machinery that Cassini uses, but every month is marked loaded and
   `load_kernels()` furnishes a fixed list (`_KERNELS`) instead. `tdb_from_sclk()` loads
   only the leap-second and clock kernels, so it works without `initialize()`.
-- The metadata of a VICAR image come from its own header: `_vicar_to_pds3()` copies
-  each value under its PDS3 keyword name and builds the clock count, `IMAGE_TIME`,
-  `FILTER_NAME`, `ORBIT_NUMBER`, `FRAME_DURATION`, `GAIN_MODE_ID` and `EXPOSURE_TYPE`
-  from the VICAR fields, spelled as the PDS3 label spells them (`UNK` for no time, no
-  picture number or no orbit, the exposure to 0.01 ms). No detached `.LBL` is read.
-- Given a PDS3 label, the Snapshot still describes the image: `filepath`, `basename`,
-  `abspath` and `image_url` name the file in the label's `^IMAGE` pointer. Unless
-  `astrometry` is True, the clock fields `RIM`, `MOD91`, `MOD10` and `MOD8` are copied
-  into `dict` from the image's VICAR header, because the label gives the count only to
-  the `MOD91` field.
-- The two inputs cannot agree where the PDS3 label corrects the VICAR header: some labels
-  respell a TARGET_NAME (`BLACK SKY`, `NON SCIENCE`) or retarget a frame (`J RINGS` for
-  the header's `JUPITER`), and the labels of GO_0003-GO_0009 and GO_0016 give the
-  ORBIT_NUMBER of a pre-Jupiter frame as the first two characters of its observation ID
-  read as a 16-bit integer (12613 for `E1`).
-- `IMAGE_TIME` is the middle of the exposure. When it is `UNK`, the start time comes from
+- What `from_file()` reads follows the operator's rules of 2026-11-18, which all four
+  host packages share. Given the VICAR image, only that file is read: its header, plus its
+  array unless `astrometry` is True. Given the PDS3 label, the label is read, and unless
+  `astrometry` is True, so is the whole image file, found from `^IMAGE` in the label's
+  directory, in the label's case or the other (`_image_path`). The array always comes
+  from the VICAR file's own record layout (`_read_vicar_image`), never from the record
+  number in `^IMAGE`: 52 GO_0019 labels put it a record early, and the label of GO_0018
+  E4/EUROPA/C0374685452R describes the wrong layout. The holdings cannot be corrected.
+- A PDS3 label that the fast parser rejects is retried with the strict parser and then
+  the loose one (`_parse_fileinfo`); a requested method starts the chain there.
+- `_ssi_labels.py` turns each source into metadata items and merges them.
+  `label_items()` drops PDS3 nulls (`UNK`, `N/A`, `NULL`), reads each set (such as
+  `CUT_OUT_WINDOW`) from its `_list` twin, and drops an `ORBIT_NUMBER` outside the tour
+  (0-35): the labels of GO_0003-GO_0009 and GO_0016 give a pre-Jupiter frame the first
+  two characters of its observation ID read as a 16-bit integer (12613 for `E1`).
+  `header_items()` keeps every set header value, strips string padding, drops unset
+  values (numeric -999, `PICNO` "?", a time whose year is 0 or less, an unknown code),
+  and adds the PDS3 names (`_VICAR_PDS3_PAIRS`) and the values built from VICAR fields:
+  the clock count, `IMAGE_TIME`, `EARTH_RECEIVED_TIME`, `FILTER_NAME`,
+  `FRAME_DURATION`, `GAIN_MODE_ID`, `EXPOSURE_TYPE`, and `ORBIT_NUMBER` (only for an
+  observation ID that starts with a tour orbit code; the IDs of the Earth flybys `E1` and
+  `E2`, Gaspra `GA`, Ida `ID`, Venus `VE`, optical navigation `OP`, and calibrations
+  `PH` name no orbit). The exposure keeps the header's precision (`EXP = 45.8333`).
+- `merge_items()` keeps every item of either source. Where both give an item and the
+  values differ, `resolve()` keeps the more precise of two numbers that differ only by
+  rounding, and otherwise the source named in `_RULES`, or the PDS3 label for an item
+  with no rule. Every rule is commented with its survey count; issue #41 records every
+  difference and every item that only one source gives. `dict` is the merged result;
+  `label_dict` and `header_dict` are the two sources verbatim, present only when read. A missing value is never `None` or a placeholder: no key, no subfield.
+- `_make_snapshot()` computes everything from the merged items, so a label read with its
+  image gets the best values of both. The exposure, a time (`IMAGE_TIME`, or the clock
+  count and `FRAME_DURATION`), and `TELEMETRY_FORMAT_ID` are required and raise
+  `HostFormatError` naming the item and the file; an index row without a telemetry format
+  (one read without its supplement) gets the full frame instead (`_INDEX_DEFAULT_MODE`).
+  An index row can still hold `UNK`, which `_make_snapshot()` treats as no value.
+- `IMAGE_TIME` is the middle of the exposure. Without it, the start time comes from
   `SPACECRAFT_CLOCK_START_COUNT` plus the shutter delay for the `FRAME_DURATION`
-  (`_SHUTTER_DELAY`), one frame earlier for an `EXTENDED` exposure.
+  (`_SHUTTER_DELAY`), one frame earlier for an `EXTENDED` exposure taken before the
+  phase-2 flight software of the Jupiter tour (`_PHASE2_FIRST_RIM`).
 - An SSI supplemental index writes `SPACECRAFT_CLOCK_START_COUNT` in SPICE form and the
   index in label form, so the default validation of `oops.Host._read_index_rows()`, which
   compares every shared column, rejects every real pair. `GalileoSSI.from_index()` passes
@@ -90,7 +112,8 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   instead. Unless one is given, it reads the supplement beside the index
   (`oops.Host.SUPPLEMENT`), which must exist: an index without one raises
   `FileNotFoundError`. Index values win the merge, so the clock count stays in label
-  form. `_read_index_rows()` is a classmethod that raises `WrongHostError` for another
+  form. A row's `FILE_SPECIFICATION_NAME` names the label; the Snapshot's `filepath`
+  names the image beside it, with `.IMG` (or `.img`) in place of `.LBL`. `_read_index_rows()` is a classmethod that raises `WrongHostError` for another
   host's index, so call it through `GalileoSSI`.
   `oops.Host.from_index()` reads the rows itself with the default validation, so it still
   fails on any index whose supplement sits beside it.

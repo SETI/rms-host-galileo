@@ -123,14 +123,15 @@ strict = true
 # every other module is excluded from discovery; the override below keeps mypy from
 # following an import into one of them.
 exclude = [
-  'host_galileo/oops/(_galileo|ssi)\.py$',
+  'host_galileo/oops/(_galileo|_ssi_labels|ssi)\.py$',
 ]
 
 # src is deliberately unannotated (see .claude/rules/python.md). The published type
 # information lives in the stubs of host_galileo and host_galileo.oops; every other module
 # has no stub, so mypy treats what the tests import from it as Any.
 [[tool.mypy.overrides]]
-module = ["host_galileo._version", "host_galileo.oops._galileo", "host_galileo.oops.ssi"]
+module = ["host_galileo._version", "host_galileo.oops._galileo",
+          "host_galileo.oops._ssi_labels", "host_galileo.oops.ssi"]
 follow_imports = "skip"
 ignore_errors = true
 
