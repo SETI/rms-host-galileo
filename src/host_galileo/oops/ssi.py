@@ -607,8 +607,6 @@ class GalileoSSI(oops.Host):
         using_cks = overrides['frame'] is None
         if using_cks:
             GalileoSSI._define_camera_frame()
-            if check_pointing:
-                GalileoSSI._check_pointing(tstart + texp / 2., filepath)
 
         # The cutout window is (line, sample, lines, samples), with a one-based origin
         window = value('CUT_OUT_WINDOW')
@@ -641,6 +639,11 @@ class GalileoSSI(oops.Host):
 
         # Apply standard overrides
         oops.Host._apply_overrides(params, filepath, **overrides)
+
+        # Check the pointing at the middle of the exposure the Snapshot will have, which a
+        # cadence override can change
+        if using_cks and check_pointing:
+            GalileoSSI._check_pointing(params['cadence'].midtime, filepath)
 
         # The local path names a file only if it exists; an astrometry read of a remote
         # label never fetches the image

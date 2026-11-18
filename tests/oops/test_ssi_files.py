@@ -14,6 +14,7 @@ differently and that changes a Snapshot attribute.
 import pathlib
 from typing import Any
 
+import julian
 import oops
 import pytest
 from pdsparser import Pds3Label
@@ -31,6 +32,10 @@ SOURCES = ['IMG', 'index']
 # The exposure in seconds, as the PDS3 label and the VICAR header give it
 LABEL_EXPOSURE = 0.04583
 HEADER_EXPOSURE = 0.0458333
+
+# The middle of the exposure in seconds TDB: IMAGE_TIME in the label and the index, and
+# the SCET fields in the VICAR header
+IMAGE_MIDTIME = float(julian.tdb_from_tai(julian.tai_from_iso('1999-10-11T04:29:52.510')))
 
 # The corners and center of the 800x400 field of view
 CORNERS = oops.Pair([(0, 0), (800, 0), (0, 400), (800, 400), (400, 200)])
@@ -95,10 +100,11 @@ def test_exposure_comes_from_the_label_read(source: str, texp: float) -> None:
     assert load(source).texp == pytest.approx(texp, rel=1.e-12)
 
 
-@pytest.mark.parametrize('source', ['LBL', 'index', 'IMG'])
-def test_exposure_is_centered_on_the_image_time(source: str) -> None:
-    obs = load(source)
-    assert obs.time[0] == pytest.approx(obs.midtime - obs.texp / 2., abs=1.e-9)
+@pytest.mark.parametrize(('source', 'texp'), [('LBL', LABEL_EXPOSURE),
+                                              ('index', LABEL_EXPOSURE),
+                                              ('IMG', HEADER_EXPOSURE)])
+def test_exposure_is_centered_on_the_image_time(source: str, texp: float) -> None:
+    assert load(source).time[0] == pytest.approx(IMAGE_MIDTIME - texp / 2., abs=1.e-6)
 
 
 @pytest.mark.parametrize('attribute', ['basename', 'image_url'])

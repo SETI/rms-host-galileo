@@ -702,7 +702,7 @@ def test_from_file_vicar_orbit_number(tmp_path: pathlib.Path, observation_id: st
 
 @pytest.mark.parametrize('observation_id', ['E1LSLUNMAP04____LCLR',
                                             'E2HPTSTARS02*000XCAL', 'OPNAV01A_LCAL',
-                                            'GAPSHIPHAS01*016G1IM'])
+                                            'GAPSHIPHAS01*016G1IM', '36XSNOTOUR01'])
 def test_from_file_vicar_without_orbit_number(tmp_path: pathlib.Path,
                                               observation_id: str) -> None:
     obs = GalileoSSI.from_file(write_vicar_image(tmp_path, PA=observation_id),
@@ -869,10 +869,11 @@ def test_label_input_finds_the_image_in_another_case(tmp_path: pathlib.Path) -> 
     assert np.array_equal(obs.data, image_array())
 
 
+# On a case-insensitive file system, the label's own spelling also names the file
 def test_label_input_names_the_image_found(tmp_path: pathlib.Path) -> None:
     path = write_pds3_image(tmp_path, image_name='c0349632100r.img')
     obs = GalileoSSI.from_file(path)
-    assert obs.basename == 'c0349632100r.img'
+    assert (tmp_path / obs.basename).is_file()
 
 
 def test_label_input_requires_the_image(tmp_path: pathlib.Path) -> None:
@@ -918,6 +919,18 @@ def test_from_file_without_pointing(tmp_path: pathlib.Path,
                        match=r'no Galileo SSI pointing at 1996-06-26T08:46:04\.890 for '
                              r'.*C0349632100R\.IMG: SPICE\(CKINSUFFDATA\)$'):
         GalileoSSI.from_file(write_vicar_image(tmp_path), astrometry=True)
+
+
+@pytest.mark.usefixtures('initialized_ssi')
+def test_from_file_checks_pointing_in_the_cadence_override(
+        tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    GalileoSSI._define_camera_frame()
+    times: list[float] = []
+    monkeypatch.setattr(oops.Frame.as_frame('GLL_SCAN_PLATFORM'), 'transform_at_time',
+                        times.append)
+    cadence = oops.cadence.SnapCadence(100., 2.)
+    GalileoSSI.from_file(write_vicar_image(tmp_path), astrometry=True, cadence=cadence)
+    assert times == [101.]
 
 
 @pytest.mark.usefixtures('initialized_ssi')

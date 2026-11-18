@@ -215,7 +215,7 @@ def header_items(header_dict):
             items[pds3_key] = time
 
     orbit = _ORBIT_CODE.match(items.get('OBSERVATION_ID', ''))
-    if orbit:
+    if orbit and int(orbit.group().lstrip('CEGJ')) in _ORBITS:
         items['ORBIT_NUMBER'] = int(orbit.group().lstrip('CEGJ'))
 
     return items
