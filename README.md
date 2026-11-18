@@ -76,6 +76,8 @@ snapshots = GalileoSSI.from_index('GO_0017_index.lbl')
 - `GalileoSSI.from_file()` makes a `Snapshot` from an SSI image. The image and field of
   view are trimmed to the cutout window given in the label unless `full_fov=True`, and
   `astrometry=True` reads no image data.
+- The PDS3 label and the VICAR file of an image give the same times, field of view,
+  pointing, and data, and either way the `Snapshot` names the image file as its path.
 - `GalileoSSI.from_index()` makes one `Snapshot` for each row of a volume index,
   including rows with a zero exposure. It merges in the columns of the supplemental
   index, matching its rows to the index's by VOLUME_ID and FILE_SPECIFICATION_NAME.

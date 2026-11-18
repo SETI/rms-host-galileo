@@ -66,8 +66,20 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   `load_kernels()` furnishes a fixed list (`_KERNELS`) instead. `tdb_from_sclk()` loads
   only the leap-second and clock kernels, so it works without `initialize()`.
 - The metadata of a VICAR image come from its own header: `_vicar_to_pds3()` copies
-  each value under its PDS3 keyword name and builds the clock count, `IMAGE_TIME` and
-  `FILTER_NAME` from the VICAR fields. No detached `.LBL` is read.
+  each value under its PDS3 keyword name and builds the clock count, `IMAGE_TIME`,
+  `FILTER_NAME`, `ORBIT_NUMBER`, `FRAME_DURATION`, `GAIN_MODE_ID` and `EXPOSURE_TYPE`
+  from the VICAR fields, spelled as the PDS3 label spells them (`UNK` for no time, no
+  picture number or no orbit, the exposure to 0.01 ms). No detached `.LBL` is read.
+- Given a PDS3 label, the Snapshot still describes the image: `filepath`, `basename`,
+  `abspath` and `image_url` name the file in the label's `^IMAGE` pointer. Unless
+  `astrometry` is True, the clock fields `RIM`, `MOD91`, `MOD10` and `MOD8` are copied
+  into `dict` from the image's VICAR header, because the label gives the count only to
+  the `MOD91` field.
+- The two inputs cannot agree where the PDS3 label corrects the VICAR header: some labels
+  respell a TARGET_NAME (`BLACK SKY`, `NON SCIENCE`) or retarget a frame (`J RINGS` for
+  the header's `JUPITER`), and the labels of GO_0003-GO_0009 and GO_0016 give the
+  ORBIT_NUMBER of a pre-Jupiter frame as the first two characters of its observation ID
+  read as a 16-bit integer (12613 for `E1`).
 - `IMAGE_TIME` is the middle of the exposure. When it is `UNK`, the start time comes from
   `SPACECRAFT_CLOCK_START_COUNT` plus the shutter delay for the `FRAME_DURATION`
   (`_SHUTTER_DELAY`), one frame earlier for an `EXTENDED` exposure.

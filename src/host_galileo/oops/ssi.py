@@ -10,7 +10,7 @@ import cspyce
 
 from filecache import FCPath
 from pdsparser import Pds3Label
-from vicar     import VicarImage
+from vicar     import VicarImage, VicarLabel
 
 import oops
 from ._galileo import _Galileo
@@ -56,10 +56,39 @@ _SHUTTER_DELAY = {
 }
 _FRAME_DURATION_TOLERANCE = 0.05
 
+# The FRAME_DURATION of the PDS3 label in seconds, keyed by the RATE of the VICAR header
+_FRAME_DURATIONS = {1: 2.333, 2: 8.667, 3: 30.333, 4: 60.667, 5: 15.166}
+
+# The GAIN_MODE_ID of the PDS3 label, keyed by the GAIN of the VICAR header
+_GAIN_MODES = {1: '400K', 2: '100K', 3: '40K', 4: '10K'}
+
+# The PICNO of a VICAR header that gives no picture number, for which the label gives UNK
+_NO_PICNO = '?'
+
+# The PDS3 label gives EXPOSURE_DURATION in milliseconds to two decimal places, where the
+# VICAR header's EXP can have four (45.8333). The VICAR value is rounded to match, so that
+# the label, the image and the index give the same exposure and times.
+_EXPOSURE_DECIMALS = 2
+
+# The orbits of the Jupiter tour, as the code that begins an observation ID: the orbit
+# number as two digits from orbit 10 on, and before that the initial of the orbit's
+# encounter target followed by its single digit. The IDs of the earlier mission phases,
+# including those of the Earth flybys, which begin "E1" and "E2", name no orbit, and the
+# host gives their ORBIT_NUMBER as UNK, as the PDS3 labels of GO_0002 and GO_0010-GO_0015
+# do. (The labels of GO_0003-GO_0009 and GO_0016 give instead the first two characters of
+# the ID read as a 16-bit integer, such as 12613 for "E1".)
+_ORBIT_CODE = re.compile(r'\d\d|J0|G1|G2|C3|E4|J5|E6|G7|G8|C9')
+
+# The PDS3 label gives the spacecraft clock count only to its MOD91 field. These fields of
+# the VICAR header give all four, so the label's dictionary takes them from the image.
+_VICAR_CLOCK_KEYS = ('RIM', 'MOD91', 'MOD10', 'MOD8')
+
 # Target name as found in PDS label -> correct name
 _TARGET_NAME_REPAIRS = {
     'BLACK_SKY'  : 'NONE',
+    'BLACK SKY'  : 'NONE',
     'NON_SCIENCE': 'NONE',
+    'NON SCIENCE': 'NONE',
     'STAR'       : 'NONE',
     'HD151288'   : 'HD 151288',
     'J RINGS'    : 'JUPITER_RING_PLANE',
@@ -146,10 +175,14 @@ class GalileoSSI(oops.Host):
             `filter`, `time_from_sclk`, `label_target`, `observation_id`,
             `spice_kernels`, `filepath`, `basename`, `spice_to_frame`, `spice_frame_name`,
             `spice_frame_id`, `abspath` and `image_url` inserted, and `data` unless
-            `astrometry` is True. `dict` is the PDS3 label, or the VICAR header with its
-            values also given under their PDS3 keyword names, and `time_from_sclk` is True
-            if the label gives no IMAGE_TIME, so that the time comes from the spacecraft
-            clock count.
+            `astrometry` is True. `filepath`, `basename`, `abspath` and `image_url` name
+            the image file, also when `fileinfo` is its PDS3 label. `dict` is the PDS3
+            label, or the VICAR header with its values also given under their PDS3
+            keyword names. Unless `astrometry` is True, the PDS3 label's `dict` also gives
+            the spacecraft clock fields RIM, MOD91, MOD10 and MOD8 of the image's VICAR
+            header, so that both inputs give the full clock count under the same keys.
+            `time_from_sclk` is True if the label gives no IMAGE_TIME, so that the time
+            comes from the spacecraft clock count.
 
         Raises:
             oops.host.PdsHostError: If the PDS3 label cannot be parsed.
@@ -175,13 +208,20 @@ class GalileoSSI(oops.Host):
         # Read the data if necessary; harmonize the label content
         data = None
         if isinstance(fileinfo, Pds3Label):
-            if not astrometry:
-                data = oops.host.read_pds3_image_array(fileinfo)
             dict_ = fileinfo.as_dict()
             # Fix the lists incorrectly labeled as sets
             for key in ('CUT_OUT_WINDOW', 'TRUTH_WINDOW'):
                 if key in dict_:
                     dict_[key] = dict_[key + '_list']
+
+            # The label names its image file, relative to its own directory, in the IMAGE
+            # pointer; the Snapshot describes that file, not the label.
+            filepath = FCPath(fileinfo.filepath).parent / fileinfo['^IMAGE']
+            if not astrometry:
+                data = oops.host.read_pds3_image_array(fileinfo)
+                vicar_label = VicarLabel(filepath, strict=False)
+                for key in _VICAR_CLOCK_KEYS:
+                    dict_[key] = vicar_label[key]
         else:
             if not astrometry:
                 if not isinstance(fileinfo, VicarImage):
@@ -189,8 +229,7 @@ class GalileoSSI(oops.Host):
                     fileinfo = VicarImage(fileinfo.filepath, strict=False)
                 data = fileinfo.data_2d
             dict_ = GalileoSSI._vicar_to_pds3(fileinfo)
-
-        filepath = FCPath(fileinfo.filepath)
+            filepath = FCPath(fileinfo.filepath)
 
         overrides = {
             'target'      : target,
@@ -547,7 +586,21 @@ class GalileoSSI(oops.Host):
 
     @staticmethod
     def _vicar_to_pds3(vic):
-        """A VICAR label converted to match the content of a PDS3 label."""
+        """A VICAR label converted to match the content of a PDS3 label.
+
+        Each value is also given under its PDS3 keyword name, spelled as the label spells
+        it: IMAGE_TIME and IMAGE_ID are UNK if the header gives no time or picture number,
+        ORBIT_NUMBER is UNK if the observation ID names no orbit of the Jupiter tour, and
+        EXPOSURE_DURATION has the label's two decimal places. FRAME_DURATION,
+        GAIN_MODE_ID and EXPOSURE_TYPE come from the RATE and GAIN codes and the exposure
+        flag of FIBE or MOFIBE.
+
+        Parameters:
+            vic (VicarLabel | VicarImage): The VICAR header.
+
+        Returns:
+            dict: The header's values under their VICAR names and their PDS3 names.
+        """
 
         dict_ = vic.as_dict(unique=False)
         dict_['SPACECRAFT_NAME'] = 'GALILEO ORBITER'
@@ -559,22 +612,45 @@ class GalileoSSI(oops.Host):
         sclk = str(dict_['RIM']).rjust(8, '0') + '.' + str(dict_['MOD91']).rjust(2, '0')
         dict_['SPACECRAFT_CLOCK_START_COUNT'] = sclk
 
+        if dict_['IMAGE_ID'] == _NO_PICNO:
+            dict_['IMAGE_ID'] = 'UNK'
+
+        dict_['EXPOSURE_DURATION'] = round(dict_['EXP'], _EXPOSURE_DECIMALS)
+        dict_['FRAME_DURATION'] = _FRAME_DURATIONS[dict_['RATE']]
+        dict_['GAIN_MODE_ID'] = _GAIN_MODES[dict_['GAIN']]
+
+        # The last of the FIBE flags (MOFIBE from phase 2 on) is 1 for an exposure that
+        # began in the frame before the one named by the clock count
+        flags = dict_['MOFIBE'] if 'MOFIBE' in dict_ else dict_['FIBE']
+        dict_['EXPOSURE_TYPE'] = 'EXTENDED' if flags[-1] == '1' else 'NORMAL'
+
         dict_['IMAGE_TIME'] = GalileoSSI._vicar_dict_to_datetime(dict_, 'SCET')
         if 'ERTYEAR' in dict_:
             dict_['EARTH_RECEIVED_TIME'] = GalileoSSI._vicar_dict_to_datetime(dict_,
                                                                               'ERT')
 
-        orbit = dict_['OBSERVATION_ID'][:2]
-        dict_['ORBIT_NUMBER'] = int(orbit if orbit.isdigit() else orbit[1])
+        orbit = _ORBIT_CODE.match(dict_['OBSERVATION_ID'])
+        dict_['ORBIT_NUMBER'] = int(orbit.group().lstrip('CEGJ')) if orbit else 'UNK'
 
         dict_['FILTER_NAME'] = GalileoSSI._FILTER_NAMES[dict_['FILTER_NUMBER']]
         return dict_
 
     @staticmethod
     def _vicar_dict_to_datetime(dict_, prefix):
-        """Convert a set of time fields in a VICAR header to a datetime."""
+        """Convert a set of time fields in a VICAR header to a datetime.
+
+        Parameters:
+            dict_ (dict): The VICAR header.
+            prefix (str): The prefix of the time fields, "SCET" or "ERT".
+
+        Returns:
+            datetime.datetime | str: The time, or "UNK" if the header gives none, which it
+            shows by a year of 0 or -32768.
+        """
 
         year = dict_[prefix + 'YEAR']
+        if year <= 0:
+            return 'UNK'
         doy = dict_[prefix + 'DAY']
         h = dict_[prefix + 'HOUR']
         m = dict_[prefix + 'MIN']

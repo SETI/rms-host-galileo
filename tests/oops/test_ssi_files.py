@@ -19,9 +19,6 @@ TEST_FILES = pathlib.Path(__file__).parents[2] / 'test_files'
 INDEX = TEST_FILES / 'GO_0022_index_edited.lbl'
 INDEX_ROWS = 30
 
-# The VICAR header gives the exposure as 45.8333 ms, the PDS3 label and index as 45.83 ms
-EXPOSURE_TOLERANCE = 1.e-5      # seconds
-
 SOURCES = ['IMG', 'index']
 
 # The corners and center of the 800x400 field of view
@@ -73,13 +70,17 @@ def test_midtime_matches_the_label(source: str) -> None:
 
 @pytest.mark.parametrize('source', SOURCES)
 def test_start_time_matches_the_label(source: str) -> None:
-    assert load(source).time[0] == pytest.approx(load('LBL').time[0],
-                                                 abs=EXPOSURE_TOLERANCE)
+    assert load(source).time[0] == pytest.approx(load('LBL').time[0], abs=1.e-6)
 
 
 @pytest.mark.parametrize('source', SOURCES)
 def test_exposure_matches_the_label(source: str) -> None:
-    assert load(source).texp == pytest.approx(load('LBL').texp, abs=EXPOSURE_TOLERANCE)
+    assert load(source).texp == load('LBL').texp
+
+
+@pytest.mark.parametrize('attribute', ['basename', 'image_url'])
+def test_label_names_the_image(attribute: str) -> None:
+    assert getattr(load('LBL'), attribute) == getattr(load('IMG'), attribute)
 
 
 @pytest.mark.parametrize('source', SOURCES)
