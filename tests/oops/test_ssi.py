@@ -513,7 +513,8 @@ def test_snapshot_navigation() -> None:
 def test_unknown_image_time_comes_from_sclk(frame_duration: float, delay: float) -> None:
     obs = snapshot(IMAGE_TIME='UNK', FRAME_DURATION=frame_duration)
     assert obs.time_from_sclk is True
-    assert obs.time[0] == pytest.approx(fake_scs2e(-77, '3496321:0:0:0') + delay)
+    assert obs.time[0] == pytest.approx(fake_scs2e(-77, '3496321:0:0:0') + delay,
+                                        rel=0, abs=1.e-6)
 
 
 def test_extended_exposure_starts_a_frame_earlier() -> None:
@@ -709,7 +710,8 @@ def test_from_file_vicar_without_image_time(tmp_path: pathlib.Path, missing: int
     obs = GalileoSSI.from_file(write_vicar_image(tmp_path, **scet), astrometry=True)
     assert obs.dict['IMAGE_TIME'] == 'UNK'
     assert obs.time_from_sclk is True
-    assert obs.time[0] == pytest.approx(fake_scs2e(-77, '3496321:0:0:0') + 1.150)
+    assert obs.time[0] == pytest.approx(fake_scs2e(-77, '3496321:0:0:0') + 1.150,
+                                        rel=0, abs=1.e-6)
 
 
 def test_from_file_accepts_a_parsed_label(tmp_path: pathlib.Path) -> None:
