@@ -41,9 +41,13 @@ The ``supplement`` argument chooses the supplemental index:
 - A path or URL reads that file instead.
 - None raises :exc:`~oops.host.HostIndexError`, unless ``row_dicts`` is given.
 
-The two tables must list the same images in the same order. The host checks each pair of
-rows by its ``VOLUME_ID`` and ``FILE_SPECIFICATION_NAME`` and raises
-:exc:`~oops.host.HostIndexError` at the first pair that differs.
+The two tables must list the same images, but not necessarily in the same order. When
+they list them in the same order, as every GO volume does, each index row is merged
+with the supplement row in the same position. When they do not, each index row is merged
+with the supplement row that has the same ``VOLUME_ID`` and ``FILE_SPECIFICATION_NAME``.
+The host raises :exc:`~oops.host.HostIndexError` if an image appears in only one of the
+tables, or if, when the orders differ, either table lists an image twice. The error
+names the first few such images and both tables.
 
 Other arguments
 ===============
@@ -113,7 +117,6 @@ only when the image file is local or already in the local cache.
 Reading an index through oops.Host
 ==================================
 
-:meth:`oops.host.Host.from_index` cannot read an SSI index. It requires the index and
-the supplement to agree in every column they share, but the two tables write
-``SPACECRAFT_CLOCK_START_COUNT`` in different forms, so every pair of rows fails that
-test. Call :meth:`~host_galileo.oops.ssi.GalileoSSI.from_index` instead.
+:meth:`oops.host.Host.from_index` recognizes an SSI index from its label and passes it,
+with its other arguments, to :meth:`~host_galileo.oops.ssi.GalileoSSI.from_index`, so
+the two give the same Snapshots.

@@ -48,9 +48,10 @@ Reading a PDS3 index
 :meth:`~host_galileo.oops.ssi.GalileoSSI.from_index` raises:
 
 :exc:`~oops.host.HostIndexError`
-    ``supplement`` is None and ``row_dicts`` is not given; the supplement does not have
-    the same rows as the index, in the same order; or the index's file name holds no
-    ``_index`` from which to find the supplement.
+    ``supplement`` is None and ``row_dicts`` is not given; an image appears in only one
+    of the index and the supplement; the two tables list the images in different orders
+    and one of them lists an image twice; or the index's file name holds no ``_index``
+    from which to find the supplement.
 
 :exc:`FileNotFoundError`
     The supplemental index does not exist.

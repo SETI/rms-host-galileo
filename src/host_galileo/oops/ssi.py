@@ -450,10 +450,12 @@ class GalileoSSI(oops.Host):
             supplement (str | pathlib.Path | FCPath | object, optional): The path to the
                 PDS label of the supplemental index file, whose columns are merged into
                 each row; an SSI index needs its supplement. Its rows must name the same
-                files in the same order as the index; where both tables give a column,
-                the index value is kept. The default, `oops.Host.SUPPLEMENT`, reads the
-                file in the directory of `filepath` whose name matches except that
-                "_index" is replaced by "_supplemental_index" in upper or lower case.
+                files as the index's: they are paired by position where the two tables
+                list the files in the same order, and otherwise by VOLUME_ID and
+                FILE_SPECIFICATION_NAME. Where both tables give a column, the index value
+                is kept. The default, `oops.Host.SUPPLEMENT`, reads the file in the
+                directory of `filepath` whose name matches except that "_index" is
+                replaced by "_supplemental_index" in upper or lower case.
             label (Pds3Label, optional): The PDS label of `filepath` if it has already
                 been read.
             row_dicts (list[dict[str, Any]], optional): A list of dictionaries, one per
@@ -545,10 +547,10 @@ class GalileoSSI(oops.Host):
                 not one of the SSI frame durations; raised when the iteration reaches that
                 row.
             oops.host.HostIndexError: If `supplement` is None while `row_dicts` is not
-                given, if the supplement does not have the same number of rows as the
-                index, if a row's VOLUME_ID or FILE_SPECIFICATION_NAME differs from the
-                index's, or if `supplement` is `oops.Host.SUPPLEMENT` and the name of
-                `filepath` contains no "_index".
+                given; if an index row has no supplement row or a supplement row belongs
+                to no index row; if, where the two tables list the files in different
+                orders, either lists a file twice; or if `supplement` is
+                `oops.Host.SUPPLEMENT` and the name of `filepath` contains no "_index".
             oops.host.WrongHostError: If `filepath` is not a Galileo SSI index.
             OSError: If `filepath`, or a `supplement` that is specified, does not exist or
                 cannot be read.

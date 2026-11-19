@@ -1536,18 +1536,19 @@ def test_from_index_rejects_another_host(tmp_path: pathlib.Path) -> None:
         GalileoSSI.from_index(path)
 
 
-def test_from_index_rejects_a_mismatched_supplement(tmp_path: pathlib.Path) -> None:
+def test_from_index_pairs_a_supplement_in_another_order(tmp_path: pathlib.Path) -> None:
+    (tmp_path / 'reordered').mkdir()
     rows = [_SUPPLEMENT_ROWS[1], _SUPPLEMENT_ROWS[0], _SUPPLEMENT_ROWS[2]]
-    with pytest.raises(oops.host.HostIndexError,
-                       match=r'FILE_SPECIFICATION_NAME value mismatch.*\n'
-                             r'index file mismatch at record \[0\]'):
-        GalileoSSI.from_index(write_index(tmp_path),
-                              supplement=write_supplement(tmp_path, rows))
+    reordered = GalileoSSI.from_index(
+        write_index(tmp_path / 'reordered'),
+        supplement=write_supplement(tmp_path / 'reordered', rows))
+    in_order = GalileoSSI.from_index(write_volume(tmp_path))
+    assert [obs.dict for obs in reordered] == [obs.dict for obs in in_order]
 
 
 def test_from_index_rejects_a_short_supplement(tmp_path: pathlib.Path) -> None:
     with pytest.raises(oops.host.HostIndexError,
-                       match='index files have different record counts'):
+                       match=r'no supplement row for an index row \(1\)'):
         GalileoSSI.from_index(write_index(tmp_path),
                               supplement=write_supplement(tmp_path, _SUPPLEMENT_ROWS[:2]))
 
@@ -1590,7 +1591,7 @@ def test_from_index_parallel(tmp_path: pathlib.Path) -> None:
 
 
 def test_host_from_index_dispatches_to_ssi(tmp_path: pathlib.Path) -> None:
-    snapshots = oops.Host.from_index(write_index(tmp_path))
+    snapshots = oops.Host.from_index(write_volume(tmp_path))
     assert [obs.instrument for obs in snapshots] == ['SSI', 'SSI', 'SSI']
 
 

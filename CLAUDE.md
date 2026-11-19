@@ -136,8 +136,10 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
 - An SSI supplemental index writes `SPACECRAFT_CLOCK_START_COUNT` in SPICE form and the
   index in label form, so the default validation of `oops.Host._read_index_rows()`, which
   compares every shared column, rejects every real pair. `GalileoSSI.from_index()` passes
-  `validate=_INDEX_KEYS` to match rows on `VOLUME_ID` and `FILE_SPECIFICATION_NAME`
-  instead. By default (`supplement=oops.Host.SUPPLEMENT`, as in `oops.Host.from_index`)
+  `validate=_INDEX_KEYS` to check rows on `VOLUME_ID` and `FILE_SPECIFICATION_NAME`
+  instead. `oops.Host._read_index_rows()` pairs the rows by position when the two tables
+  list the same files in the same order (every GO volume does) and otherwise by its
+  default file key, the same two columns. By default (`supplement=oops.Host.SUPPLEMENT`, as in `oops.Host.from_index`)
   it reads the supplement beside the index, which must exist: an index without one
   raises `FileNotFoundError`, and `supplement=None` raises `HostIndexError` rather than
   meaning "search". It takes `label=` like the base, refuses any `select` but None
@@ -152,8 +154,8 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   only for a local file or one already in the cache.
   `_read_index_rows()` is a classmethod that raises `WrongHostError` for another host's
   index, so call it through `GalileoSSI`.
-  `oops.Host.from_index()` reads the rows itself with the default validation, so it still
-  fails on any index whose supplement sits beside it.
+  `oops.Host.from_index()` identifies the host from the index label and passes the call
+  to `GalileoSSI.from_index()`, which reads the rows.
 - `GalileoSSI.from_index()` returns an iterator. It checks its arguments and reads and
   filters the tables itself, then returns a generator that builds each row's Snapshot
   when the iteration reaches it, so only an error in one row waits for that row. It must
