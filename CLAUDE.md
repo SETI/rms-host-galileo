@@ -101,8 +101,10 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   wholly held by any PDS3 item and keep their names. `ORBIT_NUMBER` comes from an
   observation ID that starts with a tour orbit code (the IDs of the Earth flybys `E1` and
   `E2`, Gaspra `GA`, Ida `ID`, Venus `VE`, optical navigation `OP`, and calibrations `PH`
-  name no orbit). `row_items()` cleans an index row the same way (numpy values to Python,
-  masked values, nulls, and the supplement's `-1` window dropped).
+  name no orbit). `row_items()` cleans an index row the same way (numpy values to Python;
+  nulls, -999, and the supplement's `-1` window dropped). It ignores the table reader's
+  masks: the indexes declare real values as null constants (`EXPOSURE_DURATION` 0, the
+  `ON_CHIP_MOSAIC_FLAG` N), and honoring them drops zero-exposure rows.
 - `merge_items()` keeps every item of either source. Where both give an item and the
   values differ, `resolve()` keeps the source that `_RULES` names for that item, the same
   for every image, or the PDS3 label for an item with no rule; there is no per-image test.
@@ -134,7 +136,12 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   (`oops.Host.SUPPLEMENT`), which must exist: an index without one raises
   `FileNotFoundError`. Index values win the merge, so the clock count stays in label
   form. A row's `FILE_SPECIFICATION_NAME` names the label; the Snapshot's `filepath`
-  names the image beside it, with `.IMG` (or `.img`) in place of `.LBL`.
+  names the image beside it, with `.IMG` (or `.img`) in place of `.LBL`, as a full path
+  or URL: `_volumes_directory()` finds the volume directories from the index's own
+  location (beside the volume of a volume's `INDEX` directory, `volumes` in place of
+  `metadata` in an RMS Node metadata tree, else the index's directory), and the row's
+  `VOLUME_ID` and file specification complete the path (design D5). `abspath` is set
+  only for a local file or one already in the cache.
   `_read_index_rows()` is a classmethod that raises `WrongHostError` for another host's
   index, so call it through `GalileoSSI`.
   `oops.Host.from_index()` reads the rows itself with the default validation, so it still

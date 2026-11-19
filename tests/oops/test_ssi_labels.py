@@ -242,11 +242,17 @@ def test_row_items_give_python_values() -> None:
                                  '"ENTROPY": 2.132, "CUT_OUT_WINDOW": [1, 1, 400, 400]}')
 
 
-def test_row_items_drop_a_masked_value() -> None:
-    row = {'ON_CHIP_MOSAIC_FLAG': np.str_('N'), 'ON_CHIP_MOSAIC_FLAG_mask': np.True_,
-           'CUT_OUT_WINDOW': np.array([1, 1, 400, 400]),
-           'CUT_OUT_WINDOW_mask': np.array([True, True, True, True])}
-    assert _ssi_labels.row_items(row) == {}
+# The SSI indexes declare real values as null constants, such as a zero exposure (the
+# index's NULL_CONSTANT = 0.) and an ON_CHIP_MOSAIC_FLAG of N (NOT_APPLICABLE_CONSTANT)
+def test_row_items_keep_a_masked_value() -> None:
+    row = {'EXPOSURE_DURATION': np.float64(0.), 'EXPOSURE_DURATION_mask': np.True_,
+           'ON_CHIP_MOSAIC_FLAG': np.str_('N'), 'ON_CHIP_MOSAIC_FLAG_mask': np.True_}
+    assert _ssi_labels.row_items(row) == {'EXPOSURE_DURATION': 0.,
+                                          'ON_CHIP_MOSAIC_FLAG': 'N'}
+
+
+def test_row_items_drop_numeric_fill() -> None:
+    assert _ssi_labels.row_items({'SMEAR_AZIMUTH': np.float64(-999.)}) == {}
 
 
 def test_row_items_drop_nulls() -> None:

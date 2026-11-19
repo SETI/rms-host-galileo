@@ -22,7 +22,8 @@ import numpy as np
 # The PDS3 constants that stand for a missing value
 _PDS3_NULLS = ('UNK', 'N/A', 'NULL')
 
-# The value of a numeric VICAR keyword that the header leaves unset, such as SMRAZ
+# The value of a numeric VICAR keyword that the header leaves unset, such as SMRAZ; the
+# indexes also write it, as their NULL_CONSTANT, for a missing number
 _VICAR_FILL = -999.
 
 # The value of a VICAR string keyword that the header leaves unset: PICNO in 162 and
@@ -399,20 +400,22 @@ def row_items(row_dict):
 
     Returns:
         dict: Every column value of the row as a Python str (stripped of padding), int,
-        float, bool, or list, except a value that the table marks as missing (in its
-        "_mask" key, for a list when every element is masked), a PDS3 null, and the
-        CUT_OUT_WINDOW of -1, -1, -1, -1 that the supplement writes for an image with no
-        cutout window. The "_mask" keys are left out.
+        float, bool, or list, except a PDS3 null, a numeric -999 (the indexes' null
+        constant for a missing number), and the CUT_OUT_WINDOW of -1, -1, -1, -1 that the
+        supplement writes for an image with no cutout window. The "_mask" keys that the
+        table reader adds are left out, and its masks are not applied: the SSI indexes
+        declare real values as null constants, such as an EXPOSURE_DURATION of 0 and an
+        ON_CHIP_MOSAIC_FLAG of N.
     """
 
     items = {}
     for (key, value) in row_dict.items():
-        if key.endswith('_mask') or np.all(row_dict.get(key + '_mask', False)):
+        if key.endswith('_mask'):
             continue
         value = value.tolist() if isinstance(value, (np.ndarray, np.generic)) else value
         if isinstance(value, str):
             value = value.strip()
-        if not is_null(value):
+        if value != _VICAR_FILL and not is_null(value):
             items[key] = value
 
     if items.get('CUT_OUT_WINDOW') == _NO_WINDOW:

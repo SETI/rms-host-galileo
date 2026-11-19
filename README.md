@@ -99,7 +99,8 @@ snapshots = GalileoSSI.from_index('GO_0017_index.lbl')
   uses for it and why, and every value that only one of them gives, is recorded in
   [issue #41](https://github.com/SETI/rms-host-galileo/issues/41).
 - `GalileoSSI.from_index()` makes one `Snapshot` for each row of a volume index,
-  including rows with a zero exposure, named for the image file of the row. It merges in
+  including rows with a zero exposure, named for the image file of the row by its full
+  path or URL, found from where the index itself is stored. It merges in
   the columns of the supplemental index, matching its rows to the index's by VOLUME_ID
   and FILE_SPECIFICATION_NAME.
 - The exposure is centered on the image time. When no label gives one, the time comes

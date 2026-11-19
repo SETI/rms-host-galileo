@@ -992,12 +992,16 @@ def test_local_label_astrometry_without_the_image_names_it(
     assert obs.abspath == (tmp_path / 'C0349632100R.IMG').resolve()
 
 
-# Treated as remote, the image file named by the label is a file never fetched into the
-# cache, unless the full read fetched it
-@pytest.mark.parametrize(('astrometry', 'has_abspath'), [(True, False), (False, True)])
+# Treated as remote, the image file named by the label is a file not in the cache unless
+# the full read fetched it or an earlier read left it there
+@pytest.mark.parametrize(('astrometry', 'cached', 'has_abspath'),
+                         [(True, False, False), (True, True, True), (False, True, True)],
+                         ids=['astrometry', 'astrometry-cached', 'full'])
 def test_remote_label_abspath(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch,
-                              astrometry: bool, has_abspath: bool) -> None:
+                              astrometry: bool, cached: bool, has_abspath: bool) -> None:
     path = write_pds3_image(tmp_path)
+    if not cached:
+        (tmp_path / 'C0349632100R.IMG').unlink()
     monkeypatch.setattr(FCPath, 'is_local', lambda self: False)
     obs = GalileoSSI.from_file(path, astrometry=astrometry)
     assert hasattr(obs, 'abspath') is has_abspath
@@ -1418,13 +1422,41 @@ def test_from_index_keeps_zero_exposures(tmp_path: pathlib.Path) -> None:
 
 def test_from_index_rows(tmp_path: pathlib.Path) -> None:
     snapshots = GalileoSSI.from_index(write_volume(tmp_path))
-    assert [obs.filepath for obs in snapshots] == ['GO_0017/J0/OPNAV/C0346405900R.IMG',
-                                                   'GO_0017/G1/GANYMEDE/C0349632100R.IMG',
-                                                   'GO_0017/G1/GANYMEDE/C0349632200R.IMG']
+    assert [str(obs.filepath) for obs in snapshots] == [
+        (tmp_path / 'GO_0017' / spec).as_posix()
+        for spec in ('J0/OPNAV/C0346405900R.IMG', 'G1/GANYMEDE/C0349632100R.IMG',
+                     'G1/GANYMEDE/C0349632200R.IMG')]
     assert [obs.filter for obs in snapshots] == ['CLEAR', 'VIOLET', 'CLEAR']
     assert [obs.observation_id for obs in snapshots] == ['J0GSOPNAV115', 'G1GSGLOBAL02',
                                                          'G1GSGLOBAL02']
     assert snapshots[1].time[0] == pytest.approx(tdb_from_image_time() - 0.13125)
+
+
+def test_from_index_names_the_image_in_full(tmp_path: pathlib.Path) -> None:
+    obs = GalileoSSI.from_index(write_volume(tmp_path))[1]
+    image = tmp_path / 'GO_0017/G1/GANYMEDE/C0349632100R.IMG'
+    assert (obs.basename, obs.image_url, obs.abspath) == ('C0349632100R.IMG',
+                                                          image.as_posix(),
+                                                          image.resolve())
+
+
+# Treated as remote, the image file is not in the cache, since an index read fetches none
+def test_from_index_remote_image_has_no_abspath(tmp_path: pathlib.Path,
+                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    index = write_volume(tmp_path)
+    monkeypatch.setattr(FCPath, 'is_local', lambda self: False)
+    assert not hasattr(GalileoSSI.from_index(index)[1], 'abspath')
+
+
+@pytest.mark.parametrize(('index', 'volumes'), [
+    ('/h/volumes/GO_0xxx/GO_0017/INDEX/IMGINDEX.LBL', '/h/volumes/GO_0xxx'),
+    ('/h/metadata/GO_0xxx/GO_0017/GO_0017_index.lbl', '/h/volumes/GO_0xxx'),
+    ('https://h.org/metadata/GO_0xxx/GO_0017/GO_0017_index.lbl',
+     'https://h.org/volumes/GO_0xxx'),
+    ('/h/GO_0017_index.lbl', '/h'),
+], ids=['volume-index', 'metadata', 'metadata-url', 'other'])
+def test_volumes_directory(index: str, volumes: str) -> None:
+    assert str(GalileoSSI._volumes_directory(index)) == volumes
 
 
 def test_from_index_requires_the_supplement_beside_it(tmp_path: pathlib.Path) -> None:

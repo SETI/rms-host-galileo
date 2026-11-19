@@ -228,7 +228,8 @@ class GalileoSSI(oops.Host):
               `spice_frame_id`.
             - `filepath`, `basename`, `abspath`, and `image_url`, which name the image
               file, also when `fileinfo` is its PDS3 label. `abspath` is absent after an
-              astrometry read of a remote PDS3 label, which never fetches the image.
+              astrometry read of a remote PDS3 label, which never fetches the image,
+              unless an earlier read put the image in the local cache.
 
         Raises:
             oops.OopsSpiceError: If no `frame` is given and the C kernels hold no
@@ -495,16 +496,23 @@ class GalileoSSI(oops.Host):
             list[Snapshot]: One observation per row of the index, including any row with a
             zero exposure, each with subfields `dict`, `host`, `instrument`, `filter`,
             `time_from_sclk`, `label_target`, `observation_id`, `spice_kernels`,
-            `filepath`, `basename`, `spice_to_frame`, `spice_frame_name` and
-            `spice_frame_id` inserted, and `spacecraft_clock_start_count` if the row
-            gives it. `dict` is the row, merged with its row of the supplement, with every
-            value as a Python str, int, float, or list; a value that the table marks as
-            missing, a PDS3 null such as UNK, and the supplement's CUT_OUT_WINDOW of -1,
-            -1, -1, -1 for an image with no cutout window are left out. No row is dropped,
-            and the C kernels are not checked for pointing.
-            `filepath` names the image file: the VOLUME_ID and FILE_SPECIFICATION_NAME
-            joined by a slash, with the label's extension ".LBL" replaced by ".IMG" in
-            the same case.
+            `filepath`, `basename`, `image_url`, `spice_to_frame`, `spice_frame_name` and
+            `spice_frame_id` inserted, `spacecraft_clock_start_count` if the row gives
+            it, and `abspath` if the image file is local or already in the local cache.
+            `dict` is the row, merged with its row of the supplement, with every value as
+            a Python str, int, float, or list; a PDS3 null such as UNK, a numeric -999,
+            and the supplement's CUT_OUT_WINDOW of -1, -1, -1, -1 for an image with no
+            cutout window are left out. The tables' other null constants are kept,
+            because they also mark real values, such as an exposure of 0. No row is
+            dropped, and the C kernels are not checked for pointing.
+            `filepath`, `basename`, `image_url`, and `abspath` name the image file, as a
+            full path or URL: the row's FILE_SPECIFICATION_NAME, with the label's
+            extension ".LBL" replaced by ".IMG" in the same case, in the volume directory
+            named by its VOLUME_ID. The volume directories are found from the location of
+            `filepath`: beside the volume that holds an index in its INDEX directory;
+            under "volumes" in place of "metadata" for an index in an RMS Node metadata
+            tree (".../metadata/GO_0xxx/GO_0017/GO_0017_index.lbl"); and otherwise in the
+            index's own directory.
 
         Raises:
             FileNotFoundError: If the supplement does not exist.
@@ -545,20 +553,43 @@ class GalileoSSI(oops.Host):
 
         # Create the list of Snapshot objects. FILE_SPECIFICATION_NAME names the label;
         # the Snapshot describes the image beside it.
+        volumes = GalileoSSI._volumes_directory(filepath)
         snapshots = []
         for row_dict in row_dicts:
-            label = row_dict['VOLUME_ID'] + '/' + row_dict['FILE_SPECIFICATION_NAME']
-            (stem, _, suffix) = label.rpartition('.')
-            fpath = stem + '.' + ('img' if suffix.islower() else 'IMG')
+            (stem, _, suffix) = str(row_dict['FILE_SPECIFICATION_NAME']).rpartition('.')
+            image = (volumes / str(row_dict['VOLUME_ID']).strip()
+                     / (stem + '.' + ('img' if suffix.islower() else 'IMG')))
             obs = GalileoSSI._make_snapshot(_ssi_labels.row_items(row_dict),
-                                            filepath=fpath, data=None,
+                                            filepath=image, data=None,
                                             full_fov=full_fov,
                                             return_all_planets=return_all_planets,
                                             overrides=overrides,
-                                            default_mode=_INDEX_DEFAULT_MODE)
+                                            default_mode=_INDEX_DEFAULT_MODE,
+                                            fetched=False)
             snapshots.append(obs)
 
         return snapshots
+
+    @staticmethod
+    def _volumes_directory(index_path):
+        """The directory that holds the volume directories that an index describes.
+
+        Parameters:
+            index_path (str | pathlib.Path | FCPath): The index file or its PDS3 label.
+
+        Returns:
+            FCPath: The parent of the volume for an index in a volume's INDEX directory;
+            for an index in an RMS Node metadata tree, such as
+            ".../metadata/GO_0xxx/GO_0017/GO_0017_index.lbl", the matching volume series
+            directory, ".../volumes/GO_0xxx"; otherwise the index's own directory.
+        """
+
+        directory = FCPath(index_path).parent
+        if directory.name.upper() == 'INDEX':
+            return directory.parent.parent
+        if directory.parent.parent.name == 'metadata':
+            return directory.parent.parent.parent / 'volumes' / directory.parent.name
+        return directory
 
     @staticmethod
     def _make_snapshot(dict_, filepath, data=None, *, full_fov=False,
@@ -588,8 +619,7 @@ class GalileoSSI(oops.Host):
                 scan platform's pointing at the midtime of the exposure, unless a frame
                 override is given.
             fetched (bool, optional): False if the image file was not read; `abspath` is
-                then left out for a remote file, which would name a file not in the local
-                cache.
+                then left out for a remote file that is not already in the local cache.
 
         Returns:
             Snapshot: The observation, with the subfields listed for :meth:`from_file`.
@@ -687,9 +717,11 @@ class GalileoSSI(oops.Host):
         if using_cks and check_pointing:
             GalileoSSI._check_pointing(params['cadence'].midtime, filepath)
 
-        # An astrometry read of a remote label never fetches the image, so its local path
-        # would name a file not in the cache
-        if not fetched and not isinstance(filepath, str) and not filepath.is_local():
+        # An astrometry read of a remote label, and an index row, never fetch the image,
+        # so its local path would name a file not in the cache unless an earlier read put
+        # it there
+        if (not fetched and not isinstance(filepath, str) and not filepath.is_local()
+                and not params['abspath'].exists()):
             del params['abspath']
 
         obs = oops.observation.Snapshot(('v', 'u'), **params)
