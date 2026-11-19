@@ -80,12 +80,13 @@ The host class can also be used directly, for one image or for every image in a 
 from host_galileo import GalileoSSI
 
 snapshot = GalileoSSI.from_file('GO_0017/G1/GANYMEDE/C0349632100R.LBL')
-snapshots = GalileoSSI.from_index('GO_0017_index.lbl')
+snapshots = list(GalileoSSI.from_index('GO_0017_index.lbl'))
 ```
 
 Replace each path with the location of the file in your copy of the archive, or with
 its URL. `from_index` also reads the supplemental index beside the index, which must
-exist.
+exist. It returns an iterator, which builds each image's Snapshot when the loop reaches
+it; `list()` builds them all at once.
 
 # Documentation
 

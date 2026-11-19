@@ -439,7 +439,10 @@ class GalileoSSI(oops.Host):
                    path=None, frame=None, cadence=None, fov=None, calibrations=None,
                    timeshift=None, navigation=None, tracker=None, parallel=None,
                    **kwargs):
-        """A list of Snapshot objects, one for each row of a Galileo SSI index file.
+        """An iterator over Snapshots, one for each row of a Galileo SSI index file.
+
+        The arguments are checked, and the index is read and filtered, when this method is
+        called; each row's Snapshot is built when the iteration reaches that row.
 
         Parameters:
             filepath (str | pathlib.Path | FCPath): The full path to a Galileo SSI index
@@ -462,7 +465,7 @@ class GalileoSSI(oops.Host):
                 their values or a set or tuple of values. If provided, only rows of the
                 index in which each named column equals the value, falls in the set of
                 values, or falls in a range defined by a tuple of two values, will be
-                included in the returned list.
+                included.
             full_fov (bool, optional): If True, each field of view covers the full image
                 rather than the cutout window.
             return_all_planets (bool, optional): Include kernels for all planets, not just
@@ -507,12 +510,13 @@ class GalileoSSI(oops.Host):
             **kwargs: Any other keyword argument raises an error.
 
         Returns:
-            list[Snapshot]: One observation per row of the index, including any row with a
-            zero exposure, each with subfields `dict`, `host`, `instrument`, `filter`,
-            `time_from_sclk`, `label_target`, `observation_id`, `spice_kernels`,
-            `filepath`, `basename`, `image_url`, `spice_to_frame`, `spice_frame_name` and
-            `spice_frame_id` inserted, `spacecraft_clock_start_count` if the row gives
-            it, and `abspath` if the image file is local or already in the local cache.
+            collections.abc.Iterator[Snapshot]: One observation per filtered row of the
+            index, in index order, including any row with a zero exposure, each with
+            subfields `dict`, `host`, `instrument`, `filter`, `time_from_sclk`,
+            `label_target`, `observation_id`, `spice_kernels`, `filepath`, `basename`,
+            `image_url`, `spice_to_frame`, `spice_frame_name` and `spice_frame_id`
+            inserted, `spacecraft_clock_start_count` if the row gives it, and `abspath`
+            if the image file is local or already in the local cache.
             `dict` is the row, merged with its row of the supplement, with every value as
             a Python str, int, float, or list; a PDS3 null such as UNK, a numeric -999,
             the placeholder a column writes for an image that has no such value (the
@@ -538,7 +542,8 @@ class GalileoSSI(oops.Host):
             oops.host.HostFormatError: If a row gives no exposure duration or no time
                 (IMAGE_TIME, or the spacecraft clock count and frame duration), or if its
                 time must come from the spacecraft clock count and its FRAME_DURATION is
-                not one of the SSI frame durations.
+                not one of the SSI frame durations; raised when the iteration reaches that
+                row.
             oops.host.HostIndexError: If `supplement` is None while `row_dicts` is not
                 given, if the supplement does not have the same number of rows as the
                 index, if a row's VOLUME_ID or FILE_SPECIFICATION_NAME differs from the
@@ -586,24 +591,26 @@ class GalileoSSI(oops.Host):
             'parallel'    : parallel,
         }
 
-        # Create the list of Snapshot objects. FILE_SPECIFICATION_NAME names the label;
-        # the Snapshot describes the image beside it.
+        # Build each row's Snapshot when the iteration reaches it.
+        # FILE_SPECIFICATION_NAME names the label; the Snapshot describes the image beside
+        # it.
         volumes = GalileoSSI._volumes_directory(filepath)
-        snapshots = []
-        for row_dict in row_dicts:
-            (stem, _, suffix) = str(row_dict['FILE_SPECIFICATION_NAME']).rpartition('.')
-            image = (volumes / str(row_dict['VOLUME_ID']).strip()
-                     / (stem + '.' + ('img' if suffix.islower() else 'IMG')))
-            obs = GalileoSSI._make_snapshot(_ssi_labels.row_items(row_dict),
-                                            filepath=image, data=None,
-                                            full_fov=full_fov,
-                                            return_all_planets=return_all_planets,
-                                            overrides=overrides,
-                                            default_mode=_INDEX_DEFAULT_MODE,
-                                            fetched=False)
-            snapshots.append(obs)
 
-        return snapshots
+        def snapshots():
+            for row_dict in row_dicts:
+                filespec = str(row_dict['FILE_SPECIFICATION_NAME'])
+                (stem, _, suffix) = filespec.rpartition('.')
+                image = (volumes / str(row_dict['VOLUME_ID']).strip()
+                         / (stem + '.' + ('img' if suffix.islower() else 'IMG')))
+                yield GalileoSSI._make_snapshot(_ssi_labels.row_items(row_dict),
+                                                filepath=image, data=None,
+                                                full_fov=full_fov,
+                                                return_all_planets=return_all_planets,
+                                                overrides=overrides,
+                                                default_mode=_INDEX_DEFAULT_MODE,
+                                                fetched=False)
+
+        return snapshots()
 
     @staticmethod
     def _volumes_directory(index_path):

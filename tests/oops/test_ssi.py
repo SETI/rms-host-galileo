@@ -3,6 +3,7 @@
 ##########################################################################################
 """Tests for the Galileo SSI host, host_galileo.oops.ssi."""
 
+from collections.abc import Iterator
 import json
 import os
 import pathlib
@@ -1108,7 +1109,7 @@ def test_from_index_needs_no_pointing(tmp_path: pathlib.Path,
     GalileoSSI._define_camera_frame()
     monkeypatch.setattr(oops.Frame.as_frame('GLL_SCAN_PLATFORM'), 'transform_at_time',
                         no_pointing)
-    assert len(GalileoSSI.from_index(write_volume(tmp_path))) == 3
+    assert len(list(GalileoSSI.from_index(write_volume(tmp_path)))) == 3
 
 ##########################################################################################
 # from_file(): parsing the PDS3 label
@@ -1415,15 +1416,51 @@ def write_volume(directory: pathlib.Path) -> pathlib.Path:
     return write_index(directory)
 
 
-def test_from_index_keeps_zero_exposures(tmp_path: pathlib.Path) -> None:
+def test_from_index_builds_each_row_when_reached(tmp_path: pathlib.Path,
+                                                 monkeypatch: pytest.MonkeyPatch) -> None:
+    """The result is an iterator that builds each row's Snapshot when it reaches the row
+    and yields the rows in index order."""
+
+    built: list[Any] = []
+    make_snapshot = GalileoSSI._make_snapshot
+
+    def spy(dict_: dict[str, Any], **kwargs: Any) -> Any:
+        built.append(kwargs['filepath'])
+        return make_snapshot(dict_, **kwargs)
+
+    monkeypatch.setattr(GalileoSSI, '_make_snapshot', spy)
     snapshots = GalileoSSI.from_index(write_volume(tmp_path))
+    assert isinstance(snapshots, Iterator)
+    assert built == []
+    first = next(snapshots)
+    assert len(built) == 1
+    assert [first.basename] + [obs.basename for obs in snapshots] == [
+        'C0346405900R.IMG', 'C0349632100R.IMG', 'C0349632200R.IMG']
+
+
+def test_from_index_raises_a_row_error_when_reached(tmp_path: pathlib.Path) -> None:
+    """A row that cannot give a Snapshot raises when the iteration reaches it, after the
+    rows before it have been yielded."""
+
+    rows = GalileoSSI._read_index_rows(write_index(tmp_path))
+    del rows[1]['EXPOSURE_DURATION']
+    snapshots = GalileoSSI.from_index(tmp_path / 'missing.lbl', row_dicts=rows)
+    assert next(snapshots).basename == 'C0346405900R.IMG'
+    with pytest.raises(oops.host.HostFormatError,
+                       match=r'exposure unknown: no EXPOSURE_DURATION for '
+                             r'.*C0349632100R\.IMG'):
+        next(snapshots)
+
+
+def test_from_index_keeps_zero_exposures(tmp_path: pathlib.Path) -> None:
+    snapshots = list(GalileoSSI.from_index(write_volume(tmp_path)))
     assert [obs.basename for obs in snapshots] == ['C0346405900R.IMG', 'C0349632100R.IMG',
                                                    'C0349632200R.IMG']
     assert snapshots[2].texp == 0.
 
 
 def test_from_index_rows(tmp_path: pathlib.Path) -> None:
-    snapshots = GalileoSSI.from_index(write_volume(tmp_path))
+    snapshots = list(GalileoSSI.from_index(write_volume(tmp_path)))
     assert [str(obs.filepath) for obs in snapshots] == [
         (tmp_path / 'GO_0017' / spec).as_posix()
         for spec in ('J0/OPNAV/C0346405900R.IMG', 'G1/GANYMEDE/C0349632100R.IMG',
@@ -1435,7 +1472,7 @@ def test_from_index_rows(tmp_path: pathlib.Path) -> None:
 
 
 def test_from_index_names_the_image_in_full(tmp_path: pathlib.Path) -> None:
-    obs = GalileoSSI.from_index(write_volume(tmp_path))[1]
+    obs = list(GalileoSSI.from_index(write_volume(tmp_path)))[1]
     image = tmp_path / 'GO_0017/G1/GANYMEDE/C0349632100R.IMG'
     assert (obs.basename, obs.image_url, obs.abspath) == ('C0349632100R.IMG',
                                                           image.as_posix(),
@@ -1447,7 +1484,7 @@ def test_from_index_remote_image_has_no_abspath(tmp_path: pathlib.Path,
                                                 monkeypatch: pytest.MonkeyPatch) -> None:
     index = write_volume(tmp_path)
     monkeypatch.setattr(FCPath, 'is_local', lambda self: False)
-    assert not hasattr(GalileoSSI.from_index(index)[1], 'abspath')
+    assert not hasattr(list(GalileoSSI.from_index(index))[1], 'abspath')
 
 
 @pytest.mark.parametrize(('index', 'volumes'), [
@@ -1467,21 +1504,21 @@ def test_from_index_requires_the_supplement_beside_it(tmp_path: pathlib.Path) ->
 
 
 def test_from_index_with_supplement(tmp_path: pathlib.Path) -> None:
-    snapshots = GalileoSSI.from_index(write_index(tmp_path),
-                                      supplement=write_supplement(tmp_path))
+    snapshots = list(GalileoSSI.from_index(write_index(tmp_path),
+                                           supplement=write_supplement(tmp_path)))
     assert snapshots[0].fov is GalileoSSI._FOVS['IM8']
     assert tuple(snapshots[1].fov.uv_shape.vals) == (392, 399)
 
 
 def test_from_index_keeps_the_index_values(tmp_path: pathlib.Path) -> None:
-    snapshots = GalileoSSI.from_index(write_index(tmp_path),
-                                      supplement=write_supplement(tmp_path))
+    snapshots = list(GalileoSSI.from_index(write_index(tmp_path),
+                                           supplement=write_supplement(tmp_path)))
     assert snapshots[1].dict['SPACECRAFT_CLOCK_START_COUNT'] == SCLK_COUNT
 
 
 def test_from_index_finds_the_supplement(tmp_path: pathlib.Path) -> None:
     write_supplement(tmp_path)
-    snapshots = GalileoSSI.from_index(write_index(tmp_path))
+    snapshots = list(GalileoSSI.from_index(write_index(tmp_path)))
     assert snapshots[0].fov is GalileoSSI._FOVS['IM8']
 
 
@@ -1530,12 +1567,12 @@ def test_from_index_uses_given_rows(tmp_path: pathlib.Path) -> None:
 def test_from_index_names_the_image_in_the_label_case(tmp_path: pathlib.Path) -> None:
     rows = GalileoSSI._read_index_rows(write_index(tmp_path))
     rows[0]['FILE_SPECIFICATION_NAME'] = 'j0/opnav/c0346405900r.lbl'
-    snapshots = GalileoSSI.from_index(tmp_path / 'missing.lbl', row_dicts=rows[:1])
-    assert snapshots[0].basename == 'c0346405900r.img'
+    [obs] = GalileoSSI.from_index(tmp_path / 'missing.lbl', row_dicts=rows[:1])
+    assert obs.basename == 'c0346405900r.img'
 
 
 def test_from_index_clock_count_subfield(tmp_path: pathlib.Path) -> None:
-    snapshots = GalileoSSI.from_index(write_volume(tmp_path))
+    snapshots = list(GalileoSSI.from_index(write_volume(tmp_path)))
     assert snapshots[1].spacecraft_clock_start_count == SCLK_COUNT
 
 
@@ -1547,7 +1584,7 @@ def test_from_index_fov_override(tmp_path: pathlib.Path) -> None:
 
 def test_from_index_parallel(tmp_path: pathlib.Path) -> None:
     parallel = snapshot()
-    snapshots = GalileoSSI.from_index(write_volume(tmp_path), parallel=parallel)
+    snapshots = list(GalileoSSI.from_index(write_volume(tmp_path), parallel=parallel))
     assert all(type(obs.frame) is oops.frame.Cmatrix for obs in snapshots)
     assert all(obs.frame.reference is parallel.frame for obs in snapshots)
 
@@ -1567,8 +1604,8 @@ def test_from_index_refuses_no_supplement(tmp_path: pathlib.Path) -> None:
 
 def test_from_index_rows_need_no_supplement(tmp_path: pathlib.Path) -> None:
     rows = GalileoSSI._read_index_rows(write_index(tmp_path))
-    assert len(GalileoSSI.from_index(tmp_path / 'x.lbl', row_dicts=rows,
-                                     supplement=None)) == 3
+    assert len(list(GalileoSSI.from_index(tmp_path / 'x.lbl', row_dicts=rows,
+                                          supplement=None))) == 3
 
 
 def test_from_index_uses_a_given_label(tmp_path: pathlib.Path,
@@ -1596,6 +1633,8 @@ def test_from_index_rejects_an_unknown_keyword(tmp_path: pathlib.Path) -> None:
 
 @pytest.mark.parametrize('select', [0, slice(None), 'data'])
 def test_from_index_refuses_select(tmp_path: pathlib.Path, select: Any) -> None:
+    """The call itself raises, before any iteration."""
+
     with pytest.raises(oops.OopsValueError,
                        match='each row of a Galileo SSI index is one observation'):
         GalileoSSI.from_index(write_volume(tmp_path), select=select)

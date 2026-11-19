@@ -38,9 +38,8 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   re-signing a public member means updating `host_galileo/__init__.pyi` in the same
   change. The `[tool.mypy] exclude`, the override list in `pyproject.toml` and
   `.stubtest-allowlist` keep it off the stub-less modules (`_galileo.py`,
-  `_ssi_labels.py` and `ssi.py`). The two `type: ignore[override]` comments are real
-  mismatches with `oops.Host`: `from_file` names its first parameter `fileinfo`, and
-  `from_index` returns `list[Snapshot]`.
+  `_ssi_labels.py` and `ssi.py`). The `type: ignore[override]` comment is a real
+  mismatch with `oops.Host`: `from_file` names its first parameter `fileinfo`.
 - `docs/conf.py` resolves the short class names in docstrings (`FCPath`, `Observation`,
   ...) through intersphinx with `_SHORT_NAMES`. Add a name there when a nitpicky build
   reports a class from another RMS package.
@@ -155,6 +154,10 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   index, so call it through `GalileoSSI`.
   `oops.Host.from_index()` reads the rows itself with the default validation, so it still
   fails on any index whose supplement sits beside it.
+- `GalileoSSI.from_index()` returns an iterator. It checks its arguments and reads and
+  filters the tables itself, then returns a generator that builds each row's Snapshot
+  when the iteration reaches it, so only an error in one row waits for that row. It must
+  not be a generator function, which would defer every error to the first `next()`.
 - The hosts apply the standard overrides through `oops.Host._apply_overrides()`, passing
   them to `_make_snapshot()` as one `overrides` dict, as rms-host-cassini does.
 - TARGET_NAME repairs and the star targets that become light sources are in `ssi.py`

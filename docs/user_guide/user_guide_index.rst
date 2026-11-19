@@ -5,13 +5,23 @@ Reading a PDS3 Index
 :meth:`~host_galileo.oops.ssi.GalileoSSI.from_index` makes one
 :class:`~oops.observation.Snapshot` for each row of a PDS3 index. It reads only the
 index tables and opens none of the images, which makes it much faster than opening a
-volume's images one at a time:
+volume's images one at a time.
+
+It returns an iterator, which gives the Snapshots row by row, in the order of the index.
+The call itself checks the arguments and reads the index, so a wrong argument or an index
+that cannot be read raises an error at once. Each row's Snapshot is built only when the
+iteration reaches that row, so an error in a row is raised there, after the rows before
+it. To build every row at once, pass the iterator to ``list()``:
 
 .. code-block:: python
 
    from host_galileo import GalileoSSI
 
-   snapshots = GalileoSSI.from_index('metadata/GO_0xxx/GO_0017/GO_0017_index.lbl')
+   index = 'metadata/GO_0xxx/GO_0017/GO_0017_index.lbl'
+   for snapshot in GalileoSSI.from_index(index):
+       print(snapshot.basename, snapshot.time)
+
+   snapshots = list(GalileoSSI.from_index(index))
 
 The index and its supplement
 ============================

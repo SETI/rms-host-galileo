@@ -58,7 +58,8 @@ Reading a PDS3 index
 :exc:`~oops.host.HostFormatError`
     A row gives no exposure duration or no time (``IMAGE_TIME``, or the clock count and
     the frame duration), or its time must come from the clock count and its frame
-    duration is not one of the camera's.
+    duration is not one of the camera's. This error is raised when the iteration reaches
+    that row.
 
 :exc:`~oops.OopsTypeError`
     A keyword argument is not one that the method accepts.
