@@ -1,6 +1,12 @@
 ##########################################################################################
 # host_galileo/__init__.py
 ##########################################################################################
+"""The Galileo mission hosts for the OOPS observation geometry toolkit.
+
+The package exports :class:`~host_galileo.oops.ssi.GalileoSSI`. Importing
+``host_galileo`` does not import oops; the first access to the class imports
+:mod:`host_galileo.oops`, which registers the host with :class:`~oops.host.Host`.
+"""
 
 import importlib
 

@@ -1,6 +1,11 @@
 ##########################################################################################
 # host_galileo/oops/ssi.py
 ##########################################################################################
+"""The Galileo SSI host, which makes a Snapshot from each Solid State Imaging image.
+
+The :doc:`user guide </user_guide/user_guide>` describes the products it reads, how it
+merges the two labels of each product, and the errors it raises.
+"""
 
 import re
 
@@ -124,20 +129,21 @@ class GalileoSSI(oops.Host):
                   timeshift=None, navigation=None, tracker=None, parallel=None, **kwargs):
         """A Snapshot object based on a given Galileo SSI image file.
 
-        By default, only the valid image region is returned.
+        By default, the image and its field of view are trimmed to the label's cutout
+        window.
 
         Given the VICAR image file, only that file is read. Given its PDS3 label, the
-        image file that the label's IMAGE pointer names, in the label's directory and in
+        image file that the label's IMAGE pointer gives, in the label's directory and in
         either upper or lower case, is read as well, unless `astrometry` is True. The
         image array is always located by the VICAR file's own header, never by the record
         number in the label's IMAGE pointer, so it is the same from either input.
 
         The metadata come from every label that was read: the PDS3 label and the VICAR
-        header, whose values the host converts into PDS3 items (such as EXP into
-        EXPOSURE_DURATION) are given only under their PDS3 names. A value that no label
-        read gives is left out; the PDS3 null constants UNK, N/A, and NULL, and the
-        header's unset values (a numeric -999, a PICNO or SPICE_C_ID of "?", time fields
-        that make no valid time), count as no value. Where both labels give a value and
+        header. A header value that the host converts into a PDS3 item, such as EXP into
+        EXPOSURE_DURATION, is given only under its PDS3 name. A value that no label read
+        gives is left out. The PDS3 null constants UNK, N/A, and NULL, and the header's
+        unset values (a numeric -999, a PICNO or SPICE_C_ID of "?", and time fields that
+        make no valid time) count as no value. Where both labels give a value and
         they differ, each item takes its value from one fixed label for every image: the
         VICAR header for EXPOSURE_DURATION and for the pointing and viewing geometry that
         the label rounds or miscomputes (such as DECLINATION, TARGET_CENTER_DISTANCE, and
@@ -529,8 +535,10 @@ class GalileoSSI(oops.Host):
             FileNotFoundError: If the supplement does not exist.
             oops.OopsTypeError: If a keyword argument is not one of those listed.
             oops.OopsValueError: If `select` is not None.
-            oops.host.HostFormatError: If a row's time must come from the spacecraft clock
-                count and its FRAME_DURATION is not one of the SSI frame durations.
+            oops.host.HostFormatError: If a row gives no exposure duration or no time
+                (IMAGE_TIME, or the spacecraft clock count and frame duration), or if its
+                time must come from the spacecraft clock count and its FRAME_DURATION is
+                not one of the SSI frame durations.
             oops.host.HostIndexError: If `supplement` is None while `row_dicts` is not
                 given, if the supplement does not have the same number of rows as the
                 index, if a row's VOLUME_ID or FILE_SPECIFICATION_NAME differs from the
@@ -884,8 +892,10 @@ class GalileoSSI(oops.Host):
     def initialize(*, planets=None, asof=None, irregulars=True):
         """Initialize key information about the SSI instrument.
 
-        Fills in key information about the camera. Must be called first. After the first
-        call, later calls to this function are ignored.
+        Fills in key information about the camera and loads the SPICE kernels.
+        :meth:`from_file` and :meth:`from_index` call it with the defaults, so it needs to
+        be called first only to choose other options. After the first call, later calls
+        to this function are ignored.
 
         Parameters:
             planets (list, optional): A list of planets to pass to

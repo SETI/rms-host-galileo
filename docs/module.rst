@@ -6,6 +6,11 @@
    :members:
    :show-inheritance:
 
+``host_galileo.oops`` Module
+============================
+
+.. automodule:: host_galileo.oops
+
 ``host_galileo.oops.ssi`` Module
 ================================
 

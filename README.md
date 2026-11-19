@@ -30,88 +30,67 @@
 
 `rms-host-galileo` is the Galileo mission host for
 [OOPS](https://github.com/SETI/rms-oops), the Object-Oriented Python SPICE toolkit for
-observation geometry. It turns Galileo Solid State Imaging (SSI) images into OOPS
-`Snapshot` objects, with the frame, field of view, timing, target, and light source that
-each image requires. It is a product of the
+observation geometry. It reads images from Galileo's Solid State Imaging (SSI) camera, as
+the Planetary Data System (PDS) archives them, and turns each one into an OOPS `Snapshot`:
+the image array, together with the time, field of view, pointing, target, and light
+source that OOPS needs to compute the image's geometry. It is a product of the
 [PDS Ring-Moon Systems Node](https://pds-rings.seti.org).
+
+# Features
+
+- **Either file of a product**: an image can be opened from its VICAR image file or from
+  its PDS3 label, and the pixels are identical either way.
+- **Metadata from both labels**: the values in the PDS3 label and in the VICAR header are
+  merged under the PDS3 names, with one fixed choice for each value on which they
+  disagree.
+- **Whole volumes at once**: a PDS3 index and its supplemental index give one `Snapshot`
+  per image, without opening the images.
+- **Pointing from SPICE**: the pointing comes from the Galileo C kernels, or from a frame
+  that the caller supplies.
+- **Exposure timing**: an image that has no image time is timed from its spacecraft clock
+  count and the camera's shutter delay.
 
 # Installation
 
-The `host_galileo` module is available via the `rms-host-galileo` package on PyPI and can
-be installed with:
+`rms-host-galileo` needs Python 3.11 or later. Install it from PyPI with:
 
 ```sh
 pip install rms-host-galileo
 ```
 
-Geometry calculations need the Galileo SPICE kernels. The host reads a fixed set of them
-through the SPICE file cache of `spicedb`, located by the `SPICE_PATH` environment
-variable (or `$OOPS_RESOURCES/SPICE`), and the SSI instrument kernel through the kernel
-database named by `SPICE_SQLITE_DB_NAME`.
+The host also needs the Galileo SPICE kernels. The
+[setup chapter](https://rms-host-galileo.readthedocs.io/en/latest/user_guide/user_guide_setup.html)
+of the user guide describes the kernels and the environment variables that locate them.
 
-# Getting Started
+# Quick Start
 
-Importing `host_galileo.oops` registers the Galileo host with `oops.Host`, which can then
-identify and read any SSI image, from either its PDS3 label or its VICAR file:
+Importing `host_galileo.oops` registers the host with `oops.Host`, which can then open
+any SSI image:
 
 ```python
 import oops
 import host_galileo.oops
 
-obs = oops.Host.from_file('GO_0017/G1/GANYMEDE/C0349632100R.LBL')
+obs = oops.Host.from_file('GO_0017/G1/GANYMEDE/C0349632100R.IMG')
 ```
 
-The host class can also be used directly. It reads a volume index together with the
-supplemental index beside it (here `GO_0017_supplemental_index.lbl`), which must exist:
+The host class can also be used directly, for one image or for every image in a volume:
 
 ```python
 from host_galileo import GalileoSSI
 
-snapshot = GalileoSSI.from_file('GO_0017/G1/GANYMEDE/C0349632100R.IMG')
+snapshot = GalileoSSI.from_file('GO_0017/G1/GANYMEDE/C0349632100R.LBL')
 snapshots = GalileoSSI.from_index('GO_0017_index.lbl')
 ```
 
-# Features
+Replace each path with the location of the file in your copy of the archive, or with
+its URL.
 
-- `GalileoSSI.from_file()` makes a `Snapshot` from an SSI image. The image and field of
-  view are trimmed to the cutout window given in the label unless `full_fov=True`, and
-  `astrometry=True` reads no image data.
-- Given the VICAR image file, the host reads only that file. Given the PDS3 label, it
-  also reads the image file that the label names, unless `astrometry=True`. The pixels
-  always come from the image file itself, so they are identical either way, and either
-  way the `Snapshot` names the image file as its path.
-- The metadata come from every label that was read: the PDS3 label and the header inside
-  the image file. Header values are given under the label's names, such as
-  `EXPOSURE_DURATION` for the header's `EXP`. Where both labels give a value and they
-  differ, each value always comes from the same label: the header for the exposure, the
-  image entropy, the pointing and viewing geometry, and the compression ratios, and the
-  PDS3 label for everything else, including the target. If that label gives no value,
-  the other label's value is used. A value that no label gives is left out rather than
-  filled with a placeholder.
-- The `dict` subfield holds the merged values, and `label_dict` and `header_dict` hold
-  each label as read. All three can be written with `json`: times are ISO 8601 strings
-  and sets are lists. `label_dict` has the PDS3 label's keywords only, without the
-  extra keys the PDS3 parser adds beside them (such as `^IMAGE_offset`). The spacecraft clock count is the `spacecraft_clock_start_count`
-  subfield, such as `"03496321.37"`; the header's finer clock fields `MOD10` and `MOD8`
-  are in `dict` when the image file was read.
-- An image whose pointing the C kernels do not hold raises `oops.OopsSpiceError`, unless
-  a frame is given.
-- The archive's two labels were compared for every SSI product. The label chosen for
-  each value that differs, and the evidence for it, are given beside that value's rule
-  in the
-  [label module](https://github.com/SETI/rms-host-galileo/blob/main/src/host_galileo/oops/_ssi_labels.py).
-- `GalileoSSI.from_index()` makes one `Snapshot` for each row of a volume index,
-  including rows with a zero exposure, named for the image file of the row by its full
-  path or URL, found from where the index itself is stored. It merges in
-  the columns of the supplemental index, matching its rows to the index's by VOLUME_ID
-  and FILE_SPECIFICATION_NAME.
-- The exposure is centered on the image time. When no label gives one, the time comes
-  from the spacecraft clock count and the shutter delay for the frame duration.
-- A target named in the label is repaired where the label is known to be wrong, and an
-  image of a star uses that star as its light source.
+# Documentation
 
-Details are available in the
-[module documentation](https://rms-host-galileo.readthedocs.io/en/latest/module.html).
+The [documentation](https://rms-host-galileo.readthedocs.io) holds the user guide and
+the API reference. To build it locally, run `make html` in the `docs` directory after
+installing the package with its `docs` extra.
 
 # Contributing
 
