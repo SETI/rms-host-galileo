@@ -29,6 +29,10 @@ variables:
     The SQLite database that lists the kernels. If it is not set, ``SPICE.db`` in the
     ``SPICE_PATH`` directory is used.
 
+The kernels and the database are the ones that OOPS itself uses. The
+`rms-oops README <https://github.com/SETI/rms-oops#environment-variables>`_ describes
+these variables and the ``SPICE`` directory of ``$OOPS_RESOURCES`` that holds them.
+
 The host furnishes one fixed set of kernels, which covers the whole mission. They lie
 under ``General`` and ``Galileo`` in the ``SPICE_PATH`` directory: the leap-second
 kernel, the spacecraft clock kernel, the frame kernel, the planetary and spacecraft
@@ -57,7 +61,7 @@ Initialization
 The first call to :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file` or
 :meth:`~host_galileo.oops.ssi.GalileoSSI.from_index` loads the kernels and defines the
 camera's fields of view. To choose the bodies that OOPS defines, or to use only the
-kernels that existed before a given date, call
+instrument kernel that existed before a given date, call
 :meth:`~host_galileo.oops.ssi.GalileoSSI.initialize` before opening the first image.
 This call defines Jupiter, planet 5, and its moons, and no other planet:
 

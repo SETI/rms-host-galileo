@@ -46,6 +46,8 @@ Finding the image file
 Given a PDS3 label, the host looks in the label's directory for the image file that the
 label's ``^IMAGE`` pointer gives. It tries the name as the label spells it, then
 in the other case, so that a copy of the archive with lower-case file names still works.
+An astrometry read does not look for the file, so its path subfields give the name as
+the label spells it.
 A path that ends in ``.lbl``, in any case, is read as a PDS3 label.
 
 The ``filepath``, ``basename``, ``abspath``, and ``image_url`` subfields always give the

@@ -40,9 +40,9 @@ source that OOPS needs to compute the image's geometry. It is a product of the
 
 - **Either file of a product**: an image can be opened from its VICAR image file or from
   its PDS3 label, and the pixels are identical either way.
-- **Metadata from both labels**: the values in the PDS3 label and in the VICAR header are
-  merged under the PDS3 names, with one fixed choice for each value on which they
-  disagree.
+- **Metadata from both labels**: when a PDS3 label is read together with its image
+  file, the values in the label and in the VICAR header are merged under the PDS3 names,
+  with one fixed choice for each value on which they disagree.
 - **Whole volumes at once**: a PDS3 index and its supplemental index give one `Snapshot`
   per image, without opening the images.
 - **Pointing from SPICE**: the pointing comes from the Galileo C kernels, or from a frame
@@ -84,7 +84,8 @@ snapshots = GalileoSSI.from_index('GO_0017_index.lbl')
 ```
 
 Replace each path with the location of the file in your copy of the archive, or with
-its URL.
+its URL. `from_index` also reads the supplemental index beside the index, which must
+exist.
 
 # Documentation
 

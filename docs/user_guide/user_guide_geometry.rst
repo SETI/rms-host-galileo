@@ -7,7 +7,7 @@ Time
 
 ``IMAGE_TIME`` is the middle of the exposure, in UTC at the spacecraft. The exposure
 begins half of ``EXPOSURE_DURATION`` earlier and ends half of it later, and the
-Snapshot's cadence covers exactly that interval.
+Snapshot's default cadence covers exactly that interval.
 
 A few images have no ``IMAGE_TIME`` in either label, such as some calibration frames in
 GO_0002 and GO_0003. For these the host computes the start of the exposure from
@@ -45,8 +45,9 @@ after any ``cadence`` override. If they do not, it raises :exc:`oops.OopsSpiceEr
 (see :doc:`user_guide_errors`).
 
 A caller that has better pointing can pass it with the ``frame`` override, for example
-as a :class:`~oops.frame.Cmatrix`. The host then uses that frame, does not consult the C
-kernels, and raises no error about missing pointing.
+as a :class:`~oops.frame.Cmatrix`. The host then uses that frame, does not check the C
+kernels, and raises no error about missing pointing. The C kernels are still loaded,
+because they belong to the fixed set of kernels that the host always furnishes.
 
 Targets and light sources
 =========================
@@ -66,7 +67,7 @@ bodies, and the host repairs them:
    * - ``J RINGS``
      - ``JUPITER_RING_PLANE``
 
-The light source is the Sun, except in an image of a star. When the target is
+By default the light source is the Sun, except in an image of a star. When the target is
 ``HD 151288``, ``PLEIADES``, ``SIRIUS``, or a star name in the form ``BET_ARI``, that
 star becomes the light source and the target becomes ``NONE``. ``HD 151288`` is not in
 the default star catalog of OOPS, so the host adds it.
