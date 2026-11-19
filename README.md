@@ -90,7 +90,8 @@ snapshots = GalileoSSI.from_index('GO_0017_index.lbl')
   filled with a placeholder.
 - The `dict` subfield holds the merged values, and `label_dict` and `header_dict` hold
   each label as read. All three can be written with `json`: times are ISO 8601 strings
-  and sets are lists. The spacecraft clock count is the `spacecraft_clock_start_count`
+  and sets are lists. `label_dict` has the PDS3 label's keywords only, without the
+  extra keys the PDS3 parser adds beside them (such as `^IMAGE_offset`). The spacecraft clock count is the `spacecraft_clock_start_count`
   subfield, such as `"03496321.37"`; the header's finer clock fields `MOD10` and `MOD8`
   are in `dict` when the image file was read.
 - An image whose pointing the C kernels do not hold raises `oops.OopsSpiceError`, unless

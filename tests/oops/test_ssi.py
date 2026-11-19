@@ -882,11 +882,12 @@ def test_label_is_parsed_without_source_text(tmp_path: pathlib.Path,
     assert [option['sources'] for option in options] == [False]
 
 
-def test_label_input_never_gives_source_text(tmp_path: pathlib.Path) -> None:
+# The parser's own keys, such as "_source", "_fmt", and "objects", are in lower case
+def test_label_input_never_gives_the_parsers_keys(tmp_path: pathlib.Path) -> None:
     obs = GalileoSSI.from_file(write_pds3_image(tmp_path), astrometry=True,
                                pds3_options={'sources': True})
     keys = {*obs.dict, *obs.label_dict}
-    assert [key for key in keys if key.endswith('_source')] == []
+    assert [key for key in keys if key != key.upper()] == []
 
 
 @pytest.mark.parametrize(('input_', 'astrometry'), [('LBL', False), ('LBL', True),

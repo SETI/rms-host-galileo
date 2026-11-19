@@ -85,12 +85,15 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   bare `ValueError`) raises `VicarHostError`.
 - `_ssi_labels.py` turns each source into metadata items and merges them, all in forms
   `json` can write. `label_json()` makes `label_dict`: `as_dict()` with each time as the
-  parser's ISO text (`_fmt`, no trailing `Z`), each set as its `_list`, and no None (the
-  parser's `END`). `header_json()` makes `header_dict`: `as_dict(unique=True)` with each
+  parser's ISO text (`_fmt`, no trailing `Z`), each set as its `_list`, no None (the
+  parser's `END`), and no key the parser adds beside the keywords (the lower-case
+  suffixes `_fmt`, `_list`, `_offset`, `_unit`, `_day`, `_sec`, `_unwrap`, `_source`,
+  and `objects`; only a pointer's `_offset` holds more than its keyword, and the host
+  never uses it). `header_json()` makes `header_dict`: `as_dict(unique=True)` with each
   repeated parameter keyed `"NAME[n]"` (`TASK[0]`, `TASK[1]`), the form all three VICAR
-  hosts share. `label_items()` keeps only the PDS3 keywords (no lower-case parser keys),
-  drops PDS3 nulls (`UNK`, `N/A`, `NULL`, any case, and lists of nothing else) and null
-  list elements, and drops an `ORBIT_NUMBER` outside the tour (0-35): the labels of
+  hosts share. `label_items()` drops PDS3 nulls (`UNK`, `N/A`, `NULL`, any case, and
+  lists of nothing else) and null list elements, and drops an `ORBIT_NUMBER` outside the
+  tour (0-35): the labels of
   GO_0003-GO_0009 and GO_0016 give a pre-Jupiter frame the first two characters of its
   observation ID read as a 16-bit integer (12613 for `E1`). `header_items()` strips
   string padding, drops fill values (numeric -999, `PICNO` or `SPICE_C_ID` "?", time

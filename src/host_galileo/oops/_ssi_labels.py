@@ -211,18 +211,23 @@ def label_json(label_dict):
             objects.
 
     Returns:
-        dict: Every key of `label_dict` in the same order and with the same value, except
-        that a date or time is given as the ISO 8601 text of the label's value, with the
-        label's digits but without a trailing "Z" (its "_fmt" key, such as
+        dict: Every keyword of `label_dict` in the same order and with the same value,
+        except that a date or time is given as the ISO 8601 text of the label's value,
+        with the label's digits but without a trailing "Z" (its "_fmt" key, such as
         "1999-10-11T04:29:52.510"), or else in ISO 8601 form, a set as its "_list" key's
         list in label order or else sorted by each element's text, and an object as this
-        same dictionary. A key whose value is None, such as END, and the label text that
-        the parser gives for a keyword (its "_source" key) are left out.
+        same dictionary. A keyword whose value is None, such as END, is left out, and so
+        is every key that the parser adds beside the keywords, which are those with a
+        lower-case suffix ("_fmt", "_list", "_offset", "_unit", "_day", "_sec",
+        "_unwrap", "_source", ...) and "objects". Of these, only a pointer's "_offset"
+        holds anything that the keyword's own value does not: the record of the image
+        file at which the object starts, which the host never uses (the array's place
+        comes from the VICAR header), and which 52 GO_0019 labels give wrongly.
     """
 
     json_dict = {}
     for (key, value) in label_dict.items():
-        if value is None or (key.endswith('_source') and key[:-7] in label_dict):
+        if value is None or key != key.upper():
             continue
         if isinstance(value, (dt.date, dt.time)):
             value = label_dict.get(key + '_fmt', value.isoformat())
@@ -261,17 +266,14 @@ def label_items(label_dict):
 
     Returns:
         dict: Every keyword of the label whose value is not a PDS3 null, including each
-        object with the same treatment, and none of the keys that the parser adds (those
-        with a lower-case suffix such as "_offset", "_fmt", or "_list", and "objects").
-        A null element of a list is left out: the lists of an SSI label whose positions
-        carry meaning (CUT_OUT_WINDOW, TRUTH_WINDOW, and STAR_WINDOW) never hold one. An
-        ORBIT_NUMBER that is not an orbit of the Jupiter tour (0-35) is omitted.
+        object with the same treatment. A null element of a list is left out: the lists
+        of an SSI label whose positions carry meaning (CUT_OUT_WINDOW, TRUTH_WINDOW, and
+        STAR_WINDOW) never hold one. An ORBIT_NUMBER that is not an orbit of the Jupiter
+        tour (0-35) is omitted.
     """
 
     items = {}
     for (key, value) in label_dict.items():
-        if key != key.upper():
-            continue
         if isinstance(value, dict):
             value = label_items(value)
         elif isinstance(value, list) and not is_null(value):

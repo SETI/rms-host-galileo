@@ -50,17 +50,21 @@ def test_label_json_writes_a_set_without_its_list_sorted() -> None:
 # The parser reads some STAR_WINDOW sets of GO_0017 C3/OPNAV as a mix of numbers and text
 def test_label_json_writes_a_mixed_set() -> None:
     raw = {'X': {801, 'N/A'}, 'X_list': [801, 'N/A'], 'Y': {2, 'A'}}
-    assert _ssi_labels.label_json(raw) == {'X': [801, 'N/A'], 'X_list': [801, 'N/A'],
-                                           'Y': [2, 'A']}
+    assert _ssi_labels.label_json(raw) == {'X': [801, 'N/A'], 'Y': [2, 'A']}
 
 
 def test_label_json_drops_none() -> None:
     assert _ssi_labels.label_json({'A': 1, 'END': None}) == {'A': 1}
 
 
-def test_label_json_drops_source_text() -> None:
-    raw = {'A': 1, 'A_source': 'A = 1', 'DATA_SOURCE': 'X'}
-    assert _ssi_labels.label_json(raw) == {'A': 1, 'DATA_SOURCE': 'X'}
+def test_label_json_drops_the_parsers_keys() -> None:
+    raw = {'^IMAGE': 'X.IMG', '^IMAGE_offset': 7, '^IMAGE_unit': '',
+           '^IMAGE_fmt': '("X.IMG", 7)', 'IMAGE_TIME': dt.datetime(2000, 1, 1),
+           'IMAGE_TIME_day': 0, 'IMAGE_TIME_sec': 43200., 'IMAGE_TIME_fmt': '2000-01-01',
+           'NOTE_unwrap': 'A B', 'A_source': 'A = 1', 'DATA_SOURCE': 'X',
+           'objects': ['IMAGE']}
+    assert _ssi_labels.label_json(raw) == {'^IMAGE': 'X.IMG', 'IMAGE_TIME': '2000-01-01',
+                                           'DATA_SOURCE': 'X'}
 
 
 def test_label_json_converts_an_object() -> None:
@@ -92,17 +96,6 @@ def test_header_json_names_a_single_parameter_plainly() -> None:
 
 def test_label_items_drop_nulls() -> None:
     assert _ssi_labels.label_items({'SMEAR_AZIMUTH': 'UNK', 'X': 1}) == {'X': 1}
-
-
-def test_label_items_drop_the_parsers_keys() -> None:
-    label = {'^IMAGE': 'X.IMG', '^IMAGE_offset': 10, 'IMAGE_TIME_fmt': 'T',
-             'objects': ['IMAGE'], 'CUT_OUT_WINDOW_list': [1]}
-    assert _ssi_labels.label_items(label) == {'^IMAGE': 'X.IMG'}
-
-
-def test_label_items_drop_the_parsers_keys_in_an_object() -> None:
-    label = {'IMAGE': {'OBJECT': 'IMAGE', 'LINES': 800, 'objects': []}}
-    assert _ssi_labels.label_items(label) == {'IMAGE': {'OBJECT': 'IMAGE', 'LINES': 800}}
 
 
 def test_label_items_drop_null_list_elements() -> None:

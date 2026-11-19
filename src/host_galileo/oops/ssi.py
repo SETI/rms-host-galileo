@@ -213,8 +213,9 @@ class GalileoSSI(oops.Host):
               (such as "^IMAGE_offset" and "IMAGE_TIME_fmt") are left out.
             - `label_dict`: the PDS3 label as given by `Pds3Label.as_dict()`, if the PDS3
               label was read, in a form that `json` can write: each time as the label
-              writes it, each set as a list in label order, and no key whose value is
-              None, such as END.
+              writes it, each set as a list in label order, no key whose value is None,
+              such as END, and none of the keys that the parser adds beside the
+              keywords (such as "^IMAGE_offset" and "IMAGE_TIME_fmt").
             - `header_dict`: every parameter of the VICAR header, if it was read. A
               parameter that occurs more than once, such as the TASK of each step of the
               processing history, is keyed by its name and its occurrence counted from
