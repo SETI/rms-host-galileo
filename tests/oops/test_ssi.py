@@ -3,7 +3,7 @@
 ##########################################################################################
 """Tests for the Galileo SSI host, host_galileo.oops.ssi."""
 
-import datetime as dt
+import json
 import os
 import pathlib
 import subprocess
@@ -13,6 +13,7 @@ from typing import Any, cast
 import julian
 import numpy as np
 import oops
+from filecache import FCPath
 from pdsparser import Pds3Label
 import pytest
 import vicar
@@ -22,6 +23,7 @@ from conftest import (SSI_DISTORTION, SSI_FOCAL_LENGTH, SSI_PIXEL_SIZE, SSI_PIXE
 import host_galileo
 import host_galileo.oops
 import host_galileo.oops.ssi as ssi
+from host_galileo.oops          import _ssi_labels
 from host_galileo.oops._galileo import _Galileo
 from host_galileo.oops.ssi      import GalileoSSI
 
@@ -162,9 +164,10 @@ def make_snapshot(dict_: dict[str, Any], *, filepath: str = 'X.LBL', data: Any =
 
 
 def snapshot(**changes: Any) -> oops.observation.Snapshot:
-    """A Snapshot made directly from the test label, without any file."""
+    """A Snapshot made from the test label as an index row, without any file."""
 
-    return make_snapshot(label_dict(**changes), filepath='GO_0017/X.LBL')
+    return make_snapshot(_ssi_labels.row_items(label_dict(**changes)),
+                         filepath='GO_0017/X.LBL')
 
 
 def tdb_from_image_time(image_time: str = IMAGE_TIME) -> float:
@@ -559,7 +562,8 @@ def test_missing_exposure_type_is_normal() -> None:
 
 def test_unknown_frame_duration_is_rejected() -> None:
     with pytest.raises(oops.host.HostFormatError,
-                       match=r'unrecognized Galileo SSI FRAME_DURATION: 20\.0'):
+                       match=r'unrecognized Galileo SSI FRAME_DURATION 20\.0 for '
+                             r'GO_0017/X\.LBL'):
         snapshot(IMAGE_TIME='UNK', FRAME_DURATION=20.)
 
 ##########################################################################################
@@ -605,17 +609,25 @@ _CLOCK: dict[str, float | str | None] = {'RIM': 3496321, 'MOD91': 37, 'MOD10': 4
                                          'MOD8': 6}
 
 
-@pytest.mark.parametrize('key', ['RIM', 'MOD91', 'MOD10', 'MOD8'])
+@pytest.mark.parametrize('key', ['MOD10', 'MOD8'])
 def test_from_file_pds3_reads_the_vicar_clock(tmp_path: pathlib.Path, key: str) -> None:
     path = write_pds3_image(tmp_path, header=_CLOCK,
                             SPACECRAFT_CLOCK_START_COUNT='03496321.37')
     assert GalileoSSI.from_file(path).dict[key] == _CLOCK[key]
 
 
-@pytest.mark.parametrize('key', ['RIM', 'MOD91', 'MOD10', 'MOD8'])
+@pytest.mark.parametrize('key', ['MOD10', 'MOD8'])
 def test_from_file_vicar_reads_the_clock(tmp_path: pathlib.Path, key: str) -> None:
     obs = GalileoSSI.from_file(write_vicar_image(tmp_path, **_CLOCK), astrometry=True)
     assert obs.dict[key] == _CLOCK[key]
+
+
+# RIM and MOD91 are wholly inside SPACECRAFT_CLOCK_START_COUNT; MOD10 and MOD8 are not
+def test_from_file_vicar_gives_rim_and_mod91_only_in_the_clock_count(
+        tmp_path: pathlib.Path) -> None:
+    obs = GalileoSSI.from_file(write_vicar_image(tmp_path, **_CLOCK), astrometry=True)
+    assert {'RIM', 'MOD91'} & obs.dict.keys() == set()
+    assert obs.dict['SPACECRAFT_CLOCK_START_COUNT'] == '03496321.37'
 
 
 def test_from_file_vicar_clock_count_subfield(tmp_path: pathlib.Path) -> None:
@@ -665,7 +677,7 @@ def test_from_file_vicar_earth_received_time(tmp_path: pathlib.Path) -> None:
     ert = {'ERTYEAR': 1996, 'ERTDAY': 178, 'ERTHOUR': 9, 'ERTMIN': 30, 'ERTSEC': 15,
            'ERTMSEC': 250}
     obs = GalileoSSI.from_file(write_vicar_image(tmp_path, **ert), astrometry=True)
-    assert obs.dict['EARTH_RECEIVED_TIME'] == dt.datetime(1996, 6, 26, 9, 30, 15, 250000)
+    assert obs.dict['EARTH_RECEIVED_TIME'] == '1996-06-26T09:30:15.250'
 
 
 def test_from_file_vicar_without_earth_received_time(tmp_path: pathlib.Path) -> None:
@@ -823,20 +835,102 @@ def test_image_input_has_no_label_dict(tmp_path: pathlib.Path, astrometry: bool)
 def test_image_input_header_dict(tmp_path: pathlib.Path, astrometry: bool) -> None:
     path = write_vicar_image(tmp_path)
     obs = GalileoSSI.from_file(path, astrometry=astrometry)
-    assert obs.header_dict == vicar.VicarLabel(path).as_dict(unique=False)
+    assert obs.header_dict == _ssi_labels.header_json(vicar.VicarLabel(path))
 
 
 @pytest.mark.parametrize('astrometry', [False, True])
 def test_label_input_label_dict(tmp_path: pathlib.Path, astrometry: bool) -> None:
     path = write_pds3_image(tmp_path)
     obs = GalileoSSI.from_file(path, astrometry=astrometry)
-    assert obs.label_dict == Pds3Label(path, method='fast', sources=True).as_dict()
+    assert obs.label_dict == _ssi_labels.label_json(Pds3Label(path, method='fast')
+                                                    .as_dict())
 
 
 def test_label_input_header_dict(tmp_path: pathlib.Path) -> None:
     obs = GalileoSSI.from_file(write_pds3_image(tmp_path))
     image = tmp_path / 'C0349632100R.IMG'
-    assert obs.header_dict == vicar.VicarLabel(image).as_dict(unique=False)
+    assert obs.header_dict == _ssi_labels.header_json(vicar.VicarLabel(image))
+
+
+# The processing history repeats TASK, USER, and DAT_TIM for each step
+def test_header_dict_keeps_the_whole_processing_history(tmp_path: pathlib.Path) -> None:
+    vic = vicar.VicarImage.from_array(image_array())
+    vic.label.append([('TASK', 'FIRST'), ('USER', 'U1'), ('TASK', 'SECOND'),
+                      ('USER', 'U2')])
+    for (key, value) in _VICAR_LABEL.items():
+        vic[key] = value
+    path = tmp_path / 'C0349632100R.IMG'
+    vic.write_file(path)
+    header = GalileoSSI.from_file(path, astrometry=True).header_dict
+    assert [header.get(key) for key in ('TASK[0]', 'TASK[1]', 'USER[1]')] == [
+        'FIRST', 'SECOND', 'U2']
+
+
+def test_label_is_parsed_without_source_text(tmp_path: pathlib.Path,
+                                             monkeypatch: pytest.MonkeyPatch) -> None:
+    options: list[dict[str, Any]] = []
+    read_fileinfo = GalileoSSI._read_fileinfo
+
+    def spy(fileinfo: Any, **kwargs: Any) -> Any:
+        options.append(kwargs['pds3_options'])
+        return read_fileinfo(fileinfo, **kwargs)
+
+    monkeypatch.setattr(GalileoSSI, '_read_fileinfo', spy)
+    GalileoSSI.from_file(write_pds3_image(tmp_path), astrometry=True,
+                         pds3_options={'sources': True})
+    assert [option['sources'] for option in options] == [False]
+
+
+def test_label_input_never_gives_source_text(tmp_path: pathlib.Path) -> None:
+    obs = GalileoSSI.from_file(write_pds3_image(tmp_path), astrometry=True,
+                               pds3_options={'sources': True})
+    keys = {*obs.dict, *obs.label_dict}
+    assert [key for key in keys if key.endswith('_source')] == []
+
+
+@pytest.mark.parametrize(('input_', 'astrometry'), [('LBL', False), ('LBL', True),
+                                                    ('IMG', False), ('IMG', True)],
+                         ids=['label', 'label-astrometry', 'image', 'image-astrometry'])
+def test_dicts_are_serializable(tmp_path: pathlib.Path, input_: str,
+                                astrometry: bool) -> None:
+    write_pds3_image(tmp_path, SOURCE_PRODUCT_ID=['A.BSP', 'N/A'])
+    obs = GalileoSSI.from_file(tmp_path / f'C0349632100R.{input_}', astrometry=astrometry)
+    json.dumps([getattr(obs, name) for name in ('dict', 'label_dict', 'header_dict')
+                if hasattr(obs, name)])
+
+
+@pytest.mark.parametrize('astrometry', [False, True])
+def test_label_input_dict_has_no_none(tmp_path: pathlib.Path, astrometry: bool) -> None:
+    obs = GalileoSSI.from_file(write_pds3_image(tmp_path), astrometry=astrometry)
+    assert [key for (key, value) in obs.dict.items() if value is None] == []
+
+
+def test_label_input_dict_has_no_parser_keys(tmp_path: pathlib.Path) -> None:
+    obs = GalileoSSI.from_file(write_pds3_image(tmp_path), astrometry=True)
+    assert [key for key in obs.dict if key != key.upper()] == []
+
+
+_CONVERTED = ['EXP', 'PA', 'TARGET', 'PICNO', 'FILTER', 'RATE', 'GAIN', 'TLMFMT', 'RIM',
+              'MOD91', 'SCETYEAR', 'SCETDAY', 'SCETHOUR', 'SCETMIN', 'SCETSEC',
+              'SCETMSEC']
+
+
+@pytest.mark.parametrize('input_', ['LBL', 'IMG'])
+def test_dict_gives_converted_values_only_under_pds3_names(tmp_path: pathlib.Path,
+                                                           input_: str) -> None:
+    write_pds3_image(tmp_path, header={'TLMFMT': 'HIS'})
+    obs = GalileoSSI.from_file(tmp_path / f'C0349632100R.{input_}')
+    assert set(_CONVERTED) & obs.dict.keys() == set()
+
+
+def test_items_have_one_type_from_either_input(tmp_path: pathlib.Path) -> None:
+    write_pds3_image(tmp_path)
+    from_label = GalileoSSI.from_file(tmp_path / 'C0349632100R.LBL', astrometry=True).dict
+    from_image = GalileoSSI.from_file(tmp_path / 'C0349632100R.IMG', astrometry=True).dict
+    shared = sorted(from_label.keys() & from_image.keys())
+    assert len(shared) >= 10
+    assert {key: type(from_label[key]) for key in shared} == {
+        key: type(from_image[key]) for key in shared}
 
 
 def test_label_astrometry_reads_no_header(tmp_path: pathlib.Path) -> None:
@@ -890,12 +984,52 @@ def test_label_input_rejects_an_invalid_image(tmp_path: pathlib.Path) -> None:
         GalileoSSI.from_file(path)
 
 
-def test_label_astrometry_without_the_image_has_no_abspath(
+def test_local_label_astrometry_without_the_image_names_it(
         tmp_path: pathlib.Path) -> None:
     path = write_pds3_image(tmp_path)
     (tmp_path / 'C0349632100R.IMG').unlink()
     obs = GalileoSSI.from_file(path, astrometry=True)
-    assert not hasattr(obs, 'abspath')
+    assert obs.abspath == (tmp_path / 'C0349632100R.IMG').resolve()
+
+
+# Treated as remote, the image file named by the label is a file never fetched into the
+# cache, unless the full read fetched it
+@pytest.mark.parametrize(('astrometry', 'has_abspath'), [(True, False), (False, True)])
+def test_remote_label_abspath(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch,
+                              astrometry: bool, has_abspath: bool) -> None:
+    path = write_pds3_image(tmp_path)
+    monkeypatch.setattr(FCPath, 'is_local', lambda self: False)
+    obs = GalileoSSI.from_file(path, astrometry=astrometry)
+    assert hasattr(obs, 'abspath') is has_abspath
+
+
+def test_label_without_an_image_pointer(tmp_path: pathlib.Path) -> None:
+    path = write_pds3_image(tmp_path)
+    text = path.read_text().replace('^IMAGE ', 'IMAGE_POINTER ')
+    path.write_text(text)
+    with pytest.raises(oops.host.PdsHostError,
+                       match=r'no \^IMAGE pointer in Galileo SSI PDS3 label '
+                             r'.*C0349632100R\.LBL'):
+        GalileoSSI.from_file(path, astrometry=True)
+
+
+def test_truncated_image(tmp_path: pathlib.Path) -> None:
+    path = write_vicar_image(tmp_path)
+    path.write_bytes(path.read_bytes()[:-SSI_PIXELS * 10])
+    with pytest.raises(oops.host.VicarHostError, match=r'C0349632100R\.IMG'):
+        GalileoSSI.from_file(path)
+
+
+@pytest.mark.parametrize('parsed', ['label', 'vicar'])
+def test_from_file_rejects_another_hosts_parsed_content(tmp_path: pathlib.Path,
+                                                        parsed: str) -> None:
+    if parsed == 'label':
+        content: Any = Pds3Label(write_pds3_image(tmp_path,
+                                                  SPACECRAFT_NAME='CASSINI ORBITER'))
+    else:
+        content = vicar.VicarLabel(write_vicar_image(tmp_path, MISSION='CASSI'))
+    with pytest.raises(oops.host.WrongHostError, match='not a Galileo SSI'):
+        GalileoSSI.from_file(content, astrometry=True)
 
 
 def test_from_file_accepts_a_vicar_label(tmp_path: pathlib.Path) -> None:
@@ -915,9 +1049,26 @@ def test_from_file_without_pointing(tmp_path: pathlib.Path,
     GalileoSSI._define_camera_frame()
     monkeypatch.setattr(oops.Frame.as_frame('GLL_SCAN_PLATFORM'), 'transform_at_time',
                         no_pointing)
-    with pytest.raises(oops.host.HostError,
-                       match=r'no Galileo SSI pointing at 1996-06-26T08:46:04\.890 for '
-                             r'.*C0349632100R\.IMG: SPICE\(CKINSUFFDATA\)$'):
+    path = write_vicar_image(tmp_path)
+    with pytest.raises(oops.OopsSpiceError,
+                       match=r'^no Galileo SSI pointing at 1996-06-26T08:46:04\.890 for '
+                             r'.*C0349632100R\.IMG: SPICE\(CKINSUFFDATA\)$') as info:
+        GalileoSSI.from_file(path, astrometry=True)
+    assert (info.value.spice_code, str(info.value.filepath)) == ('SPICE(CKINSUFFDATA)',
+                                                                 str(path))
+    assert type(info.value.__cause__) is OSError
+
+
+@pytest.mark.usefixtures('initialized_ssi')
+def test_from_file_lets_another_failure_through(tmp_path: pathlib.Path,
+                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail(*args: Any, **kwargs: Any) -> None:
+        raise TypeError('not a SPICE failure')
+
+    GalileoSSI._define_camera_frame()
+    monkeypatch.setattr(oops.Frame.as_frame('GLL_SCAN_PLATFORM'), 'transform_at_time',
+                        fail)
+    with pytest.raises(TypeError, match='not a SPICE failure'):
         GalileoSSI.from_file(write_vicar_image(tmp_path), astrometry=True)
 
 
@@ -987,7 +1138,15 @@ def test_from_file_passes_another_parser_on(tmp_path: pathlib.Path) -> None:
 
 def test_from_file_rejects_a_label_no_parser_reads(tmp_path: pathlib.Path) -> None:
     path = write_pds3_image(tmp_path, extra_lines=('OBJECT = TABLE',))
-    with pytest.raises(oops.host.PdsHostError):
+    with pytest.raises(oops.host.PdsHostError,
+                       match=r'no PDS3 parser can read .*C0349632100R\.LBL'):
+        GalileoSSI.from_file(path, astrometry=True)
+
+
+# The parsers reject an hour of 25 as a value, not as syntax
+def test_from_file_rejects_an_invalid_label_time(tmp_path: pathlib.Path) -> None:
+    path = write_pds3_image(tmp_path, IMAGE_TIME='1996-06-26T25:46:04.890Z')
+    with pytest.raises(oops.host.PdsHostError, match=r'C0349632100R\.LBL'):
         GalileoSSI.from_file(path, astrometry=True)
 
 ##########################################################################################
@@ -1022,17 +1181,23 @@ def test_merged_value_sets_the_geometry(tmp_path: pathlib.Path) -> None:
     assert obs.target == 'JUPITER_RING_PLANE'
 
 
-def test_precise_header_number_wins(tmp_path: pathlib.Path) -> None:
+def test_header_exposure_wins(tmp_path: pathlib.Path) -> None:
     path = write_pds3_image(tmp_path, header={'EXP': 45.8333}, EXPOSURE_DURATION=45.83)
     obs = GalileoSSI.from_file(path)
     assert obs.texp == 0.0458333
 
 
-def test_precise_label_number_wins(tmp_path: pathlib.Path) -> None:
+# The rule names a source, not the value with more digits
+def test_header_distance_wins_with_fewer_digits(tmp_path: pathlib.Path) -> None:
     path = write_pds3_image(tmp_path, header={'TARGET_CENTER_DISTANCE': 665796.},
                             TARGET_CENTER_DISTANCE=665795.8)
     obs = GalileoSSI.from_file(path)
-    assert obs.dict['TARGET_CENTER_DISTANCE'] == 665795.8
+    assert obs.dict['TARGET_CENTER_DISTANCE'] == 665796.
+
+
+def test_label_exposure_fills_a_header_without_one(tmp_path: pathlib.Path) -> None:
+    path = write_pds3_image(tmp_path, header={'EXP': None}, EXPOSURE_DURATION=45.83)
+    assert GalileoSSI.from_file(path).texp == pytest.approx(0.04583, rel=1.e-12)
 
 
 def test_label_number_wins_a_disagreement(tmp_path: pathlib.Path) -> None:

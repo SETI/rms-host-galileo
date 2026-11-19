@@ -37,12 +37,13 @@ class GalileoSSI(Host):
     # Given the image file, only it is read; given a PDS3 label, the label and its image
     # file are read and their metadata merged, except that with astrometry=True the label
     # is read alone and the image file need not exist. A value that no label read gives
-    # has no subfield and no dict key. A file that cannot be read or parsed raises
-    # oops.host.HostFormatError (or its subclass PdsHostError or VicarHostError), as does
-    # an image for which no label read gives the exposure, the time, or the telemetry
-    # format. An image with no C-kernel record raises oops.host.HostError whose cause is
-    # the SPICE exception and whose message ends with its short code, such as
-    # "SPICE(CKINSUFFDATA)".
+    # has no subfield and no dict key; each item that both give takes its value from one
+    # fixed label. A label or VICAR header that cannot be parsed, or a label with no
+    # IMAGE pointer, raises oops.host.PdsHostError or VicarHostError (subclasses of
+    # HostFormatError), as does an image for which no label read gives the exposure, the
+    # time, or the telemetry format; a missing image file behind a label raises
+    # FileNotFoundError. Unless a frame is given, an image whose pointing the C kernels do
+    # not hold raises oops.OopsSpiceError, whose cause is the SPICE exception.
     @staticmethod
     def from_file(  # type: ignore[override]
         fileinfo: str | pathlib.Path | FCPath | Pds3Label | VicarLabel

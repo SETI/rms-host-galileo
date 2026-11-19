@@ -81,12 +81,22 @@ snapshots = GalileoSSI.from_index('GO_0017_index.lbl')
   always come from the image file itself, so they are identical either way, and either
   way the `Snapshot` names the image file as its path.
 - The metadata come from every label that was read: the PDS3 label and the header inside
-  the image file. Where both give a value, the two are merged: a rounded number gives way
-  to the more precise one, and otherwise the PDS3 label's value is kept. A value that no
-  label gives is left out rather than filled with a placeholder. The `dict` subfield
-  holds the merged values, and `label_dict` and `header_dict` hold each label as read.
-- Every difference between the two labels found in the archive, and every value that
-  only one of them gives, is recorded in
+  the image file. Header values are given under the label's names, such as
+  `EXPOSURE_DURATION` for the header's `EXP`. Where both labels give a value and they
+  differ, each value always comes from the same label: the header for the exposure, for
+  the pointing and viewing geometry, and for the compression ratios, and the PDS3 label
+  for everything else, including the target. If that label gives no value, the other
+  label's value is used. A value that no label gives is left out rather than filled with
+  a placeholder.
+- The `dict` subfield holds the merged values, and `label_dict` and `header_dict` hold
+  each label as read. All three can be written with `json`: times are ISO 8601 strings
+  and sets are lists. The spacecraft clock count is the `spacecraft_clock_start_count`
+  subfield, such as `"03496321.37"`; the header's finer clock fields `MOD10` and `MOD8`
+  are in `dict` when the image file was read.
+- An image whose pointing the C kernels do not hold raises `oops.OopsSpiceError`, unless
+  a frame is given.
+- Every difference between the two labels found in the archive, which label the host
+  uses for it and why, and every value that only one of them gives, is recorded in
   [issue #41](https://github.com/SETI/rms-host-galileo/issues/41).
 - `GalileoSSI.from_index()` makes one `Snapshot` for each row of a volume index,
   including rows with a zero exposure, named for the image file of the row. It merges in

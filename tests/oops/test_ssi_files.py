@@ -11,6 +11,7 @@ to two decimal places and the VICAR header to four, is the one value that the la
 differently and that changes a Snapshot attribute.
 """
 
+import json
 import pathlib
 from typing import Any
 
@@ -54,9 +55,10 @@ def load(source: str) -> Any:
 def items() -> tuple[dict[str, Any], dict[str, Any]]:
     """The metadata items of the test label and of the test image's VICAR header."""
 
-    label = Pds3Label(TEST_FILES / 'C0520792800R_edited.LBL', sources=True).as_dict()
-    header = VicarLabel(TEST_FILES / 'C0520792800R_edited.IMG').as_dict(unique=False)
-    return (_ssi_labels.label_items(label), _ssi_labels.header_items(header))
+    label = Pds3Label(TEST_FILES / 'C0520792800R_edited.LBL').as_dict()
+    header = VicarLabel(TEST_FILES / 'C0520792800R_edited.IMG')
+    return (_ssi_labels.label_items(_ssi_labels.label_json(label)),
+            _ssi_labels.header_items(_ssi_labels.header_json(header)))
 
 
 def test_index_reads_every_row() -> None:
@@ -124,20 +126,34 @@ def test_fov_los_matches_the_label(source: str) -> None:
     assert los == pytest.approx(load('LBL').fov.los_from_uv(CORNERS).vals, abs=1.e-15)
 
 
-def test_labels_differ_only_by_rounding() -> None:
+def test_labels_differ_only_in_items_with_rules() -> None:
     (label, header) = items()
     differ = [key for key in label.keys() & header.keys()
-              if label[key] != header[key]
-              and not _ssi_labels._is_rounded(label[key], header[key])
-              and not _ssi_labels._is_rounded(header[key], label[key])]
+              if label[key] != header[key] and key not in _ssi_labels._RULES]
     assert differ == []
 
 
-def test_merge_keeps_the_precise_exposure() -> None:
+def test_items_have_one_type_from_either_label() -> None:
+    (label, header) = items()
+    shared = sorted(label.keys() & header.keys())
+    assert {key: type(label[key]) for key in shared} == {key: type(header[key])
+                                                         for key in shared}
+
+
+@pytest.mark.parametrize('source', ['LBL', 'IMG', 'index'])
+def test_dict_is_serializable(source: str) -> None:
+    json.dumps(load(source).dict)
+
+
+def test_merge_takes_the_header_exposure() -> None:
     assert _ssi_labels.merge_items(*items())['EXPOSURE_DURATION'] == 45.8333
 
 
-def test_merge_keeps_the_precise_distance() -> None:
-    assert _ssi_labels.merge_items(*items())['TARGET_CENTER_DISTANCE'] == 2863.583
+def test_merge_takes_the_header_distance() -> None:
+    assert _ssi_labels.merge_items(*items())['TARGET_CENTER_DISTANCE'] == 2863.58
+
+
+def test_merge_takes_the_label_central_body_distance() -> None:
+    assert _ssi_labels.merge_items(*items())['CENTRAL_BODY_DISTANCE'] == 422186.5
 
 ##########################################################################################

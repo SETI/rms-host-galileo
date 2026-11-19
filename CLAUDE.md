@@ -29,8 +29,9 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   (`-W -n`), codespell and PyMarkdown. `ruff format` is disabled.
   `.github/workflows/run-tests.yml` runs the same set. `scripts/setup-venv.sh` builds the
   `venv/` that the scripts expect; set `VENV` to use another.
-- The `oops.Host` API first appears in rms-oops 0.4.0, the minimum version in
-  `pyproject.toml`.
+- The minimum rms-oops in `pyproject.toml` is 0.5.0, the first release with
+  `oops.OopsSpiceError` (the `oops.Host` API came in 0.4.0). Until 0.5.0 is on PyPI,
+  develop against the rms-oops branch that adds it, installed into `venv/`.
 - The type information is published in two stubs: `host_galileo/__init__.pyi` declares
   `GalileoSSI` in full, and `host_galileo/oops/__init__.pyi` re-exports it. `stubtest`
   checks them against the runtime in the check script and in CI, so adding, renaming or
@@ -74,33 +75,53 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   from the VICAR file's own record layout (`_read_vicar_image`), never from the record
   number in `^IMAGE`: 52 GO_0019 labels put it a record early, and the label of GO_0018
   E4/EUROPA/C0374685452R describes the wrong layout. The holdings cannot be corrected.
-- A PDS3 label that the fast parser rejects is retried with the strict parser and then
-  the loose one (`_parse_fileinfo`); a requested method starts the chain there.
-- `_ssi_labels.py` turns each source into metadata items and merges them.
-  `label_items()` drops PDS3 nulls (`UNK`, `N/A`, `NULL`), reads each set (such as
-  `CUT_OUT_WINDOW`) from its `_list` twin, and drops an `ORBIT_NUMBER` outside the tour
-  (0-35): the labels of GO_0003-GO_0009 and GO_0016 give a pre-Jupiter frame the first
-  two characters of its observation ID read as a 16-bit integer (12613 for `E1`).
-  `header_items()` keeps every set header value, strips string padding, drops unset
-  values (numeric -999, `PICNO` "?", a time whose year is 0 or less, an unknown code),
-  and adds the PDS3 names (`_VICAR_PDS3_PAIRS`) and the values built from VICAR fields:
-  the clock count, `IMAGE_TIME`, `EARTH_RECEIVED_TIME`, `FILTER_NAME`,
-  `FRAME_DURATION`, `GAIN_MODE_ID`, `EXPOSURE_TYPE`, and `ORBIT_NUMBER` (only for an
-  observation ID that starts with a tour orbit code; the IDs of the Earth flybys `E1` and
-  `E2`, Gaspra `GA`, Ida `ID`, Venus `VE`, optical navigation `OP`, and calibrations
-  `PH` name no orbit). The exposure keeps the header's precision (`EXP = 45.8333`).
+- A PDS3 label that the fast parser rejects, for its syntax (`PdsHostError`) or for a
+  value it cannot convert such as an hour of 25 (`OopsValueError`), is retried with the
+  strict parser and then the loose one (`_parse_fileinfo`); a requested method starts the
+  chain there, and if all fail the result is `PdsHostError`. The parsers always run with
+  `sources=False`, whatever the caller passes. A parsed `Pds3Label`, `VicarLabel`, or
+  `VicarImage` passed in is checked with the detectors (`WrongHostError`). A label with
+  no `^IMAGE` raises `PdsHostError`, and an image shorter than its header says (numpy's
+  bare `ValueError`) raises `VicarHostError`.
+- `_ssi_labels.py` turns each source into metadata items and merges them, all in forms
+  `json` can write. `label_json()` makes `label_dict`: `as_dict()` with each time as the
+  parser's ISO text (`_fmt`, no trailing `Z`), each set as its `_list`, and no None (the
+  parser's `END`). `header_json()` makes `header_dict`: `as_dict(unique=True)` with each
+  repeated parameter keyed `"NAME[n]"` (`TASK[0]`, `TASK[1]`), the form all three VICAR
+  hosts share. `label_items()` keeps only the PDS3 keywords (no lower-case parser keys),
+  drops PDS3 nulls (`UNK`, `N/A`, `NULL`, any case, and lists of nothing else) and null
+  list elements, and drops an `ORBIT_NUMBER` outside the tour (0-35): the labels of
+  GO_0003-GO_0009 and GO_0016 give a pre-Jupiter frame the first two characters of its
+  observation ID read as a 16-bit integer (12613 for `E1`). `header_items()` strips
+  string padding, drops fill values (numeric -999, `PICNO` or `SPICE_C_ID` "?", time
+  fields out of range), and gives every value it converts only under its PDS3 name
+  (design D4): the `_VICAR_PDS3_PAIRS` keywords, `RIM` and `MOD91` as the clock count,
+  the `SCET`/`ERT` fields as `IMAGE_TIME`/`EARTH_RECEIVED_TIME`, `RATE` and `GAIN` as
+  `FRAME_DURATION` and `GAIN_MODE_ID`. `MOD10`, `MOD8`, `FIBE`, and `MOFIBE` are not
+  wholly held by any PDS3 item and keep their names. `ORBIT_NUMBER` comes from an
+  observation ID that starts with a tour orbit code (the IDs of the Earth flybys `E1` and
+  `E2`, Gaspra `GA`, Ida `ID`, Venus `VE`, optical navigation `OP`, and calibrations `PH`
+  name no orbit). `row_items()` cleans an index row the same way (numpy values to Python,
+  masked values, nulls, and the supplement's `-1` window dropped).
 - `merge_items()` keeps every item of either source. Where both give an item and the
-  values differ, `resolve()` keeps the more precise of two numbers that differ only by
-  rounding, and otherwise the source named in `_RULES`, or the PDS3 label for an item
-  with no rule. Every rule is commented with its survey count; issue #41 records every
-  difference and every item that only one source gives. `dict` is the merged result;
-  `label_dict` and `header_dict` are the two sources verbatim, present only when read. A missing value is never `None` or a placeholder: no key, no subfield.
+  values differ, `resolve()` keeps the source that `_RULES` names for that item, the same
+  for every image, or the PDS3 label for an item with no rule; there is no per-image test.
+  Each rule cites its evidence (survey counts, SPICE checks, DATASET.CAT) and #41, which
+  lists every difference, each rule's reason, and the images on which its source is
+  wrong. A value missing from the winning source falls to the other; nothing else does.
+  `dict` is the merged result; `label_dict` and `header_dict` are present only when read.
+  A missing value is never `None` or a placeholder: no key, no subfield.
 - `_make_snapshot()` computes everything from the merged items, so a label read with its
   image gets the best values of both. The exposure, a time (`IMAGE_TIME`, or the clock
   count and `FRAME_DURATION`), and `TELEMETRY_FORMAT_ID` are required and raise
   `HostFormatError` naming the item and the file; an index row without a telemetry format
   (one read without its supplement) gets the full frame instead (`_INDEX_DEFAULT_MODE`).
-  An index row can still hold `UNK`, which `_make_snapshot()` treats as no value.
+- Missing pointing raises `oops.OopsSpiceError` (`_check_pointing`), built with
+  `from_spice_error()` from the cspyce exception (only `LookupError`, `OSError`,
+  `RuntimeError`, `ValueError`) at the midtime after any cadence override, naming the
+  image file. Only `from_file()` checks, and only when no `frame` is given;
+  `from_index()` never checks and never drops a row. `abspath` is removed only for an
+  astrometry read of a remote label, whose image was never fetched.
 - `IMAGE_TIME` is the middle of the exposure. Without it, the start time comes from
   `SPACECRAFT_CLOCK_START_COUNT` plus the shutter delay for the `FRAME_DURATION`
   (`_SHUTTER_DELAY`), one frame earlier for an `EXTENDED` exposure taken before the
@@ -113,8 +134,9 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   (`oops.Host.SUPPLEMENT`), which must exist: an index without one raises
   `FileNotFoundError`. Index values win the merge, so the clock count stays in label
   form. A row's `FILE_SPECIFICATION_NAME` names the label; the Snapshot's `filepath`
-  names the image beside it, with `.IMG` (or `.img`) in place of `.LBL`. `_read_index_rows()` is a classmethod that raises `WrongHostError` for another
-  host's index, so call it through `GalileoSSI`.
+  names the image beside it, with `.IMG` (or `.img`) in place of `.LBL`.
+  `_read_index_rows()` is a classmethod that raises `WrongHostError` for another host's
+  index, so call it through `GalileoSSI`.
   `oops.Host.from_index()` reads the rows itself with the default validation, so it still
   fails on any index whose supplement sits beside it.
 - The hosts apply the standard overrides through `oops.Host._apply_overrides()`, passing

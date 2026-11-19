@@ -126,6 +126,9 @@ nitpick_ignore_regex = [
     # Napoleon splits a type such as "(bool, optional)" on the comma and looks up each
     # piece, so the trailing "optional" of every optional parameter arrives here.
     (r'py:class', r'optional'),
+    # rms-oops 0.5.0 adds OopsSpiceError, but its published documentation does not have
+    # it yet. Remove this entry once rms-oops 0.5.0 is released and documented.
+    (r'py:exc', r'oops\.OopsSpiceError'),
 ]
 
 # MyST-Parser settings
