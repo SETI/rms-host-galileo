@@ -31,8 +31,25 @@ _VICAR_FILL = -999.
 # SPICE_C_ID in 64 of the 14,672 products
 _VICAR_STRING_FILLS = {'PICNO': '?', 'SPICE_C_ID': '?'}
 
-# The CUT_OUT_WINDOW value written in the supplemental index when the label has none
-_NO_WINDOW = [-1, -1, -1, -1]
+# The value that an index or supplemental index column writes where it has none, for each
+# column whose declared null constant stands for no value. The supplement's CUT_OUT_WINDOW
+# is -1s for the 10,791 images with no cutout window. For the others, comparing the 14,662
+# rows of GO_0002-GO_0023 with both labels of each product: in 11,080 rows that hold the
+# constant, neither label gives the item at all; in the other 646 (TRUTH_WINDOW and the
+# ICT values) or 647-662 (the compression ratios), the labels give a real value the index
+# replaced, such as an ICT_DESPIKE_THRESHOLD of 255 or a compression ratio of 1.831. Only
+# 1-3 rows per ratio hold 0 where the labels also write 0. The other declared constants
+# are real values that the product labels also give, and are kept: EXPOSURE_DURATION 0
+# (301 rows), ON_CHIP_MOSAIC_FLAG N, and PRODUCT_VERSION_ID 0.
+_INDEX_PLACEHOLDERS = {
+    'CUT_OUT_WINDOW'                : [-1, -1, -1, -1],
+    'TRUTH_WINDOW'                  : [-1, -1, -1, -1],
+    'ICT_DESPIKE_THRESHOLD'         : -1,
+    'ICT_QUANTIZATION_STEP_SIZE'    : -1,
+    'ENCODING_COMPRESSION_RATIO'    : 0.,
+    'ENCODING_MAX_COMPRESSION_RATIO': 0.,
+    'ENCODING_MIN_COMPRESSION_RATIO': 0.,
+}
 
 # The PDS3 keywords and the VICAR keywords that give the same whole value. Some values
 # have the same name in both, such as CUT_OUT_WINDOW and TARGET_CENTER_DISTANCE; they need
@@ -405,10 +422,12 @@ def row_items(row_dict):
     Returns:
         dict: Every column value of the row as a Python str (stripped of padding), int,
         float, bool, or list, except a PDS3 null, a numeric -999 (the indexes' null
-        constant for a missing number), and the CUT_OUT_WINDOW of -1, -1, -1, -1 that the
-        supplement writes for an image with no cutout window. The "_mask" keys that the
-        table reader adds are left out, and its masks are not applied: the SSI indexes
-        declare real values as null constants, such as an EXPOSURE_DURATION of 0 and an
+        constant for a missing number), a column's placeholder for an image that has no
+        such value (such as the CUT_OUT_WINDOW of -1, -1, -1, -1 and the compression ratio
+        of 0), and an ORBIT_NUMBER that is not an orbit of the Jupiter tour (0-35), which
+        the index writes as -99 for the earlier frames. The "_mask" keys that the table
+        reader adds are left out, and its masks are not applied: the SSI indexes declare
+        real values as null constants, such as an EXPOSURE_DURATION of 0 and an
         ON_CHIP_MOSAIC_FLAG of N.
     """
 
@@ -419,11 +438,12 @@ def row_items(row_dict):
         value = value.tolist() if isinstance(value, (np.ndarray, np.generic)) else value
         if isinstance(value, str):
             value = value.strip()
-        if value != _VICAR_FILL and not is_null(value):
+        if (value != _VICAR_FILL and value != _INDEX_PLACEHOLDERS.get(key)
+                and not is_null(value)):
             items[key] = value
 
-    if items.get('CUT_OUT_WINDOW') == _NO_WINDOW:
-        del items['CUT_OUT_WINDOW']
+    if 'ORBIT_NUMBER' in items and items['ORBIT_NUMBER'] not in _ORBITS:
+        del items['ORBIT_NUMBER']
 
     return items
 

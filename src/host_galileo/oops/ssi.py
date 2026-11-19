@@ -509,10 +509,13 @@ class GalileoSSI(oops.Host):
             it, and `abspath` if the image file is local or already in the local cache.
             `dict` is the row, merged with its row of the supplement, with every value as
             a Python str, int, float, or list; a PDS3 null such as UNK, a numeric -999,
-            and the supplement's CUT_OUT_WINDOW of -1, -1, -1, -1 for an image with no
-            cutout window are left out. The tables' other null constants are kept,
-            because they also mark real values, such as an exposure of 0. No row is
-            dropped, and the C kernels are not checked for pointing.
+            the placeholder a column writes for an image that has no such value (the
+            supplement's CUT_OUT_WINDOW and TRUTH_WINDOW of -1, -1, -1, -1, its
+            ICT_DESPIKE_THRESHOLD and ICT_QUANTIZATION_STEP_SIZE of -1, and a compression
+            ratio of 0), and the ORBIT_NUMBER of -99 that the index gives a frame taken
+            before the Jupiter tour are left out. The tables' other null constants are
+            kept, because they also mark real values, such as an exposure of 0. No row
+            is dropped, and the C kernels are not checked for pointing.
             `filepath`, `basename`, `image_url`, and `abspath` name the image file, as a
             full path or URL: the row's FILE_SPECIFICATION_NAME, with the label's
             extension ".LBL" replaced by ".IMG" in the same case, in the volume directory

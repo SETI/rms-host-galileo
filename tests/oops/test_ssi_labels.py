@@ -240,12 +240,15 @@ def test_row_items_give_python_values() -> None:
 
 
 # The SSI indexes declare real values as null constants, such as a zero exposure (the
-# index's NULL_CONSTANT = 0.) and an ON_CHIP_MOSAIC_FLAG of N (NOT_APPLICABLE_CONSTANT)
+# index's NULL_CONSTANT = 0.), an ON_CHIP_MOSAIC_FLAG of N, and a PRODUCT_VERSION_ID of 0
+# (the supplement's NOT_APPLICABLE_CONSTANT); the product labels give the same values
 def test_row_items_keep_a_masked_value() -> None:
     row = {'EXPOSURE_DURATION': np.float64(0.), 'EXPOSURE_DURATION_mask': np.True_,
-           'ON_CHIP_MOSAIC_FLAG': np.str_('N'), 'ON_CHIP_MOSAIC_FLAG_mask': np.True_}
+           'ON_CHIP_MOSAIC_FLAG': np.str_('N'), 'ON_CHIP_MOSAIC_FLAG_mask': np.True_,
+           'PRODUCT_VERSION_ID': np.int64(0), 'PRODUCT_VERSION_ID_mask': np.True_}
     assert _ssi_labels.row_items(row) == {'EXPOSURE_DURATION': 0.,
-                                          'ON_CHIP_MOSAIC_FLAG': 'N'}
+                                          'ON_CHIP_MOSAIC_FLAG': 'N',
+                                          'PRODUCT_VERSION_ID': 0}
 
 
 def test_row_items_drop_numeric_fill() -> None:
@@ -256,8 +259,23 @@ def test_row_items_drop_nulls() -> None:
     assert _ssi_labels.row_items({'IMAGE_TIME': np.str_('UNK')}) == {}
 
 
-def test_row_items_drop_the_supplements_placeholder_window() -> None:
-    assert _ssi_labels.row_items({'CUT_OUT_WINDOW': np.array([-1, -1, -1, -1])}) == {}
+@pytest.mark.parametrize(('column', 'value'), [
+    ('CUT_OUT_WINDOW', np.array([-1, -1, -1, -1])),
+    ('TRUTH_WINDOW', np.array([-1, -1, -1, -1])),
+    ('ICT_DESPIKE_THRESHOLD', np.int64(-1)),
+    ('ICT_QUANTIZATION_STEP_SIZE', np.int64(-1)),
+    ('ENCODING_COMPRESSION_RATIO', np.float64(0.)),
+    ('ENCODING_MAX_COMPRESSION_RATIO', np.float64(0.)),
+    ('ENCODING_MIN_COMPRESSION_RATIO', np.float64(0.)),
+])
+def test_row_items_drop_a_placeholder(column: str, value: Any) -> None:
+    assert _ssi_labels.row_items({column: value}) == {}
+
+
+@pytest.mark.parametrize(('orbit', 'kept'), [(0, True), (35, True), (-99, False)])
+def test_row_items_keep_only_tour_orbits(orbit: int, kept: bool) -> None:
+    row = {'ORBIT_NUMBER': np.int64(orbit)}
+    assert ('ORBIT_NUMBER' in _ssi_labels.row_items(row)) is kept
 
 ##########################################################################################
 # merge_items() and resolve()

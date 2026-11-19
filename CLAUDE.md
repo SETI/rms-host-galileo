@@ -105,9 +105,12 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   observation ID that starts with a tour orbit code (the IDs of the Earth flybys `E1` and
   `E2`, Gaspra `GA`, Ida `ID`, Venus `VE`, optical navigation `OP`, and calibrations `PH`
   name no orbit). `row_items()` cleans an index row the same way (numpy values to Python;
-  nulls, -999, and the supplement's `-1` window dropped). It ignores the table reader's
-  masks: the indexes declare real values as null constants (`EXPOSURE_DURATION` 0, the
-  `ON_CHIP_MOSAIC_FLAG` N), and honoring them drops zero-exposure rows.
+  nulls, -999, `ORBIT_NUMBER` outside 0-35 (the index's -99), and each column's
+  placeholder in `_INDEX_PLACEHOLDERS` dropped: the `-1` windows and ICT values and the 0
+  compression ratios, never real values). It ignores the table reader's masks: the
+  indexes declare real values as null constants (`EXPOSURE_DURATION` 0, the
+  `ON_CHIP_MOSAIC_FLAG` N, `PRODUCT_VERSION_ID` 0), and honoring them drops zero-exposure
+  rows.
 - `merge_items()` keeps every item of either source. Where both give an item and the
   values differ, `resolve()` keeps the source that `_RULES` names for that item, the same
   for every image, or the PDS3 label for an item with no rule; there is no per-image test.
