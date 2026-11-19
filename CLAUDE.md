@@ -132,9 +132,12 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   index in label form, so the default validation of `oops.Host._read_index_rows()`, which
   compares every shared column, rejects every real pair. `GalileoSSI.from_index()` passes
   `validate=_INDEX_KEYS` to match rows on `VOLUME_ID` and `FILE_SPECIFICATION_NAME`
-  instead. Unless one is given, it reads the supplement beside the index
-  (`oops.Host.SUPPLEMENT`), which must exist: an index without one raises
-  `FileNotFoundError`. Index values win the merge, so the clock count stays in label
+  instead. By default (`supplement=oops.Host.SUPPLEMENT`, as in `oops.Host.from_index`)
+  it reads the supplement beside the index, which must exist: an index without one
+  raises `FileNotFoundError`, and `supplement=None` raises `HostIndexError` rather than
+  meaning "search". It takes `label=` like the base, refuses any `select` but None
+  (`OopsValueError`, since each row is one observation), and refuses any other keyword
+  (`OopsTypeError`). Index values win the merge, so the clock count stays in label
   form. A row's `FILE_SPECIFICATION_NAME` names the label; the Snapshot's `filepath`
   names the image beside it, with `.IMG` (or `.img`) in place of `.LBL`, as a full path
   or URL: `_volumes_directory()` finds the volume directories from the index's own

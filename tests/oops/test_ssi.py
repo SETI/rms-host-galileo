@@ -1555,4 +1555,48 @@ def test_host_from_index_dispatches_to_ssi(tmp_path: pathlib.Path) -> None:
     snapshots = oops.Host.from_index(write_index(tmp_path))
     assert [obs.instrument for obs in snapshots] == ['SSI', 'SSI', 'SSI']
 
+
+# The supplement is required, so None is refused rather than taken as "search for it"
+def test_from_index_refuses_no_supplement(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(oops.host.HostIndexError,
+                       match=r'Galileo SSI index needs its supplemental index: '
+                             r'.*GO_0017_index\.lbl'):
+        GalileoSSI.from_index(write_volume(tmp_path), supplement=None)
+
+
+def test_from_index_rows_need_no_supplement(tmp_path: pathlib.Path) -> None:
+    rows = GalileoSSI._read_index_rows(write_index(tmp_path))
+    assert len(GalileoSSI.from_index(tmp_path / 'x.lbl', row_dicts=rows,
+                                     supplement=None)) == 3
+
+
+def test_from_index_uses_a_given_label(tmp_path: pathlib.Path,
+                                       monkeypatch: pytest.MonkeyPatch) -> None:
+    index = write_volume(tmp_path)
+    label = Pds3Label(index)
+    labels: list[Any] = []
+    read_index_rows = GalileoSSI._read_index_rows
+
+    def spy(filepath: Any, **kwargs: Any) -> Any:
+        labels.append(kwargs['label'])
+        return read_index_rows(filepath, **kwargs)
+
+    monkeypatch.setattr(GalileoSSI, '_read_index_rows', spy)
+    GalileoSSI.from_index(index, label=label)
+    assert labels == [label]
+
+
+def test_from_index_rejects_an_unknown_keyword(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(oops.OopsTypeError,
+                       match=r"unexpected keyword argument for GalileoSSI\.from_index: "
+                             r"'supplementary'"):
+        GalileoSSI.from_index(write_volume(tmp_path), supplementary=None)
+
+
+@pytest.mark.parametrize('select', [0, slice(None), 'data'])
+def test_from_index_refuses_select(tmp_path: pathlib.Path, select: Any) -> None:
+    with pytest.raises(oops.OopsValueError,
+                       match='each row of a Galileo SSI index is one observation'):
+        GalileoSSI.from_index(write_volume(tmp_path), select=select)
+
 ##########################################################################################

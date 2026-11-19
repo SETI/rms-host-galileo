@@ -426,25 +426,29 @@ class GalileoSSI(oops.Host):
         return vicar
 
     @staticmethod
-    def from_index(filepath, *, supplement=None, row_dicts=None, pds3_options=None,
-                   filter=None, full_fov=False, return_all_planets=False, select=None,
-                   target=None, lightsource=None, path=None, frame=None, cadence=None,
-                   fov=None, calibrations=None, timeshift=None, navigation=None,
-                   tracker=None, parallel=None, **kwargs):
+    def from_index(filepath, *, supplement=oops.Host.SUPPLEMENT, label=None,
+                   row_dicts=None, pds3_options=None, filter=None, full_fov=False,
+                   return_all_planets=False, select=None, target=None, lightsource=None,
+                   path=None, frame=None, cadence=None, fov=None, calibrations=None,
+                   timeshift=None, navigation=None, tracker=None, parallel=None,
+                   **kwargs):
         """A list of Snapshot objects, one for each row of a Galileo SSI index file.
 
         Parameters:
             filepath (str | pathlib.Path | FCPath): The full path to a Galileo SSI index
                 file or its PDS label.
-            supplement (str | pathlib.Path | FCPath, optional): The path to the PDS label
-                of a supplemental index file, whose columns are merged into each row. Its
-                rows must name the same files in the same order as the index; where both
-                tables give a column, the index value is kept. If not specified, the
-                directory of `filepath` is searched for a file whose name matches except
-                that "_index" is replaced by "_supplemental_index" in upper or lower case.
+            supplement (str | pathlib.Path | FCPath | object, optional): The path to the
+                PDS label of the supplemental index file, whose columns are merged into
+                each row; an SSI index needs its supplement. Its rows must name the same
+                files in the same order as the index; where both tables give a column,
+                the index value is kept. The default, `oops.Host.SUPPLEMENT`, reads the
+                file in the directory of `filepath` whose name matches except that
+                "_index" is replaced by "_supplemental_index" in upper or lower case.
+            label (Pds3Label, optional): The PDS label of `filepath` if it has already
+                been read.
             row_dicts (list[dict[str, Any]], optional): A list of dictionaries, one per
                 row of the index. Include if `filepath` and `supplement` have already been
-                read. If provided, `supplement` is ignored.
+                read. If provided, `supplement` and `label` are ignored.
             pds3_options (dict[str, Any], optional): Any keyword arguments and their
                 values to be passed to the :class:`~pdsparser.Pds3Label` parser.
             filter (dict[str, Any], optional): A dictionary of index column names and
@@ -456,9 +460,8 @@ class GalileoSSI(oops.Host):
                 rather than the cutout window.
             return_all_planets (bool, optional): Include kernels for all planets, not just
                 the target of the mission phase.
-            select (int | slice | str | tuple[int | slice | str, ...]): Accepted for
-                compatibility with :meth:`oops.Host.from_index` and ignored, because each
-                row describes a single observation.
+            select (None): Must be None. Each row describes a single observation, so
+                there is nothing to select from; any other value raises an error.
             target (str | oops.Body, optional): Override for the default target Body of
                 every observation. Use "NONE" for inertial pointing, indicating that no
                 Solar System body was tracked.
@@ -494,7 +497,7 @@ class GalileoSSI(oops.Host):
                 time, different frame and FOV) relative to which this Observation has a
                 fixed offset. Note that no more than one of `parallel` and `tracker` can
                 be specified.
-            **kwargs: Additional keyword arguments; they are accepted and ignored.
+            **kwargs: Any other keyword argument raises an error.
 
         Returns:
             list[Snapshot]: One observation per row of the index, including any row with a
@@ -520,25 +523,41 @@ class GalileoSSI(oops.Host):
 
         Raises:
             FileNotFoundError: If the supplement does not exist.
+            oops.OopsTypeError: If a keyword argument is not one of those listed.
+            oops.OopsValueError: If `select` is not None.
             oops.host.HostFormatError: If a row's time must come from the spacecraft clock
                 count and its FRAME_DURATION is not one of the SSI frame durations.
-            oops.host.HostIndexError: If the supplement does not have the same number of
-                rows as the index, if a row's VOLUME_ID or FILE_SPECIFICATION_NAME
-                differs from the index's, or if `supplement` is not specified and the
-                name of `filepath` contains no "_index".
+            oops.host.HostIndexError: If `supplement` is None while `row_dicts` is not
+                given, if the supplement does not have the same number of rows as the
+                index, if a row's VOLUME_ID or FILE_SPECIFICATION_NAME differs from the
+                index's, or if `supplement` is `oops.Host.SUPPLEMENT` and the name of
+                `filepath` contains no "_index".
             oops.host.WrongHostError: If `filepath` is not a Galileo SSI index.
             OSError: If `filepath`, or a `supplement` that is specified, does not exist or
                 cannot be read.
         """
 
+        # A mistaken keyword, such as "supplementary", must not be dropped silently
+        if kwargs:
+            raise oops.OopsTypeError(f'unexpected keyword argument for '
+                                     f'GalileoSSI.from_index: {next(iter(kwargs))!r}')
+        if select is not None:
+            raise oops.OopsValueError(f'each row of a Galileo SSI index is one '
+                                      f'observation; select must be None, not '
+                                      f'{select!r}')
+
         GalileoSSI.initialize()
 
-        # Read and filter the index table
+        # Read and filter the index table. The supplement is required, so None is refused
+        # rather than taken to mean "search for it".
         if row_dicts is None:
-            supplement = supplement or oops.Host.SUPPLEMENT
+            if supplement is None:
+                raise oops.host.HostIndexError(f'Galileo SSI index needs its '
+                                               f'supplemental index: {filepath}')
             row_dicts = GalileoSSI._read_index_rows(filepath, supplement=supplement,
                                                     validate=_INDEX_KEYS,
-                                                    pds3_options=pds3_options)
+                                                    pds3_options=pds3_options,
+                                                    label=label)
         row_dicts = oops.Host._filter_index_rows(row_dicts, filter)
 
         overrides = {
