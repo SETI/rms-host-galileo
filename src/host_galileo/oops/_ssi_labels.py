@@ -14,6 +14,7 @@ Every value is in a form that `json` can write: times are ISO 8601 strings as th
 label writes them, and sets are lists.
 """
 
+import calendar
 import datetime as dt
 import re
 
@@ -86,10 +87,11 @@ _GAIN_MODES = {1: '400K', 2: '100K', 3: '40K', 4: '10K'}
 _TIME_FIELDS = ('YEAR', 'DAY', 'HOUR', 'MIN', 'SEC', 'MSEC')
 _TIME_ITEMS = (('IMAGE_TIME', 'SCET'), ('EARTH_RECEIVED_TIME', 'ERT'))
 
-# The valid range of each VICAR time field after the year; the day of the year is also
-# checked against the year's length. A second of 60 is a leap second.
-_TIME_LIMITS = {'DAY': (1, 366), 'HOUR': (0, 23), 'MIN': (0, 59), 'SEC': (0, 60),
-                'MSEC': (0, 999)}
+# The valid range of each VICAR time field; the day of the year is also checked against
+# the year's length. A year of 0 or less is the header's fill (-32768 in the RAW_CAL
+# frames), and a second of 60 is a leap second.
+_TIME_LIMITS = {'YEAR': (1, dt.MAXYEAR), 'DAY': (1, 366), 'HOUR': (0, 23),
+                'MIN': (0, 59), 'SEC': (0, 60), 'MSEC': (0, 999)}
 
 # The orbits of the Jupiter tour, as the code that begins an observation ID: the orbit
 # number as two digits from orbit 10 on, and before that the initial of the orbit's
@@ -375,20 +377,20 @@ def _vicar_time(fields):
     Returns:
         str | None: The time as "YYYY-MM-DDTHH:MM:SS.sss", or None if the header gives
         none, which it shows by leaving out a field, by a year of 0 or less, or by a
-        field out of its range, such as an hour of 24.
+        field out of its range, such as an hour of 24 or a day beyond the year's length.
     """
 
-    if None in fields or fields[0] <= 0:
+    if None in fields:
         return None
-    for (value, name) in zip(fields[1:], _TIME_FIELDS[1:], strict=True):
+    for (value, name) in zip(fields, _TIME_FIELDS, strict=True):
         (low, high) = _TIME_LIMITS[name]
         if not low <= value <= high:
             return None
 
     (year, doy, hour, minute, second, msec) = fields
-    date = dt.date(year, 1, 1) + dt.timedelta(days=doy - 1)
-    if date.year != year:
+    if doy > (366 if calendar.isleap(year) else 365):
         return None
+    date = dt.date(year, 1, 1) + dt.timedelta(days=doy - 1)
     return f'{date.isoformat()}T{hour:02d}:{minute:02d}:{second:02d}.{msec:03d}'
 
 

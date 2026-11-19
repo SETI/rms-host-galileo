@@ -156,13 +156,10 @@ def test_header_items_clock_count() -> None:
                      'MOD8': 6}
 
 
-@pytest.mark.parametrize(('header', 'key'), [
-    ({'RATE': 9}, 'RATE'),
-    ({'GAIN': 0}, 'GAIN'),
-    ({'RIM': 1}, 'RIM'),
-], ids=['rate', 'gain', 'mod91'])
-def test_header_items_keep_an_unconverted_code(header: dict[str, Any], key: str) -> None:
-    assert key in _ssi_labels.header_items(header)
+@pytest.mark.parametrize('header', [{'RATE': 9}, {'GAIN': 0}, {'RIM': 1}],
+                         ids=['rate', 'gain', 'mod91'])
+def test_header_items_keep_an_unconverted_code(header: dict[str, Any]) -> None:
+    assert _ssi_labels.header_items(header) == header
 
 
 def test_header_items_unknown_filter_number() -> None:
@@ -221,8 +218,15 @@ def test_header_items_time_fill_is_no_value(field: tuple[str, int]) -> None:
     assert _ssi_labels.header_items(_SCET | dict([field])) == {}
 
 
-def test_header_items_day_beyond_the_year_is_no_value() -> None:
-    assert _ssi_labels.header_items(_SCET | {'SCETYEAR': 1997, 'SCETDAY': 366}) == {}
+@pytest.mark.parametrize(('year', 'day'), [(1997, 366), (9999, 366), (10000, 1)],
+                         ids=['not-leap', 'last-year', 'beyond-dates'])
+def test_header_items_day_beyond_the_year_is_no_value(year: int, day: int) -> None:
+    assert _ssi_labels.header_items(_SCET | {'SCETYEAR': year, 'SCETDAY': day}) == {}
+
+
+def test_header_items_leap_day() -> None:
+    header = _SCET | {'SCETYEAR': 1996, 'SCETDAY': 366}
+    assert _ssi_labels.header_items(header)['IMAGE_TIME'] == '1996-12-31T08:46:04.890'
 
 
 def test_header_items_drop_numeric_fill() -> None:

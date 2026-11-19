@@ -69,6 +69,10 @@ _FRAME_DURATION_TOLERANCE = 0.05
 # unused: all 77 frames with no IMAGE_TIME are phase-1 frames.
 _PHASE2_FIRST_RIM = 3464059
 
+# The separators between the fields of a clock count, in the label form "RRRRRRRR.MM" or
+# the SPICE form "RRRRRRRR:MM:S:T", as _Galileo.tdb_from_sclk() splits it
+_SCLK_SEPARATORS = re.compile(r'[^0-9A-Za-z]+')
+
 # The subfields that give a metadata item unchanged, and the items' names. Each subfield
 # is inserted only if the item has a value.
 _ITEM_SUBFIELDS = [
@@ -785,7 +789,8 @@ class GalileoSSI(oops.Host):
         by IMAGE_TIME to within about 1/3 s for most images.
 
         Parameters:
-            sclk (str): The SPACECRAFT_CLOCK_START_COUNT, as "RRRRRRRR.MM".
+            sclk (str): The SPACECRAFT_CLOCK_START_COUNT, as "RRRRRRRR.MM" or in the
+                SPICE form "RRRRRRRR:MM:S:T".
             frame_duration (float | str): The FRAME_DURATION in seconds.
             exposure_type (str | None): The EXPOSURE_TYPE; None is taken as "NORMAL".
             filepath (FCPath | str): The image file, named in an error.
@@ -805,7 +810,7 @@ class GalileoSSI(oops.Host):
                                             f'{frame_duration} for {filepath}')
 
         tstart = _Galileo.tdb_from_sclk(sclk) + _SHUTTER_DELAY[nominal]
-        phase1 = int(sclk.partition('.')[0]) < _PHASE2_FIRST_RIM
+        phase1 = int(_SCLK_SEPARATORS.split(sclk.strip())[0]) < _PHASE2_FIRST_RIM
         if exposure_type == 'EXTENDED' and phase1:
             tstart -= nominal
 

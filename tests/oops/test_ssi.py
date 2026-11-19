@@ -545,8 +545,9 @@ def test_unknown_image_time_comes_from_sclk(frame_duration: float, delay: float)
 
 # The phase-1 flight software ran until RIM 2492218, and the phase-2 software from 3464059
 @pytest.mark.parametrize(('sclk', 'shift'), [('02492218.00', 15.167),
+                                             ('02492218:00:0:0', 15.167),
                                              ('03464059.00', 0.)],
-                         ids=['phase-1', 'phase-2'])
+                         ids=['phase-1', 'phase-1-spice-form', 'phase-2'])
 def test_extended_exposure_start(sclk: str, shift: float) -> None:
     normal = snapshot(IMAGE_TIME='UNK', SPACECRAFT_CLOCK_START_COUNT=sclk)
     extended = snapshot(IMAGE_TIME='UNK', SPACECRAFT_CLOCK_START_COUNT=sclk,
@@ -967,7 +968,7 @@ def test_label_input_finds_the_image_in_another_case(tmp_path: pathlib.Path) -> 
 def test_label_input_names_the_image_found(tmp_path: pathlib.Path) -> None:
     path = write_pds3_image(tmp_path, image_name='c0349632100r.img')
     obs = GalileoSSI.from_file(path)
-    assert (tmp_path / obs.basename).is_file()
+    assert (tmp_path / obs.basename).samefile(tmp_path / 'c0349632100r.img')
 
 
 def test_label_input_requires_the_image(tmp_path: pathlib.Path) -> None:
