@@ -14,7 +14,7 @@ import cspyce
 
 from filecache import FCPath
 from pdsparser import Pds3Label
-from vicar     import VicarError, VicarImage
+from vicar     import VicarError, VicarImage, VicarLabel
 
 import oops
 from ._galileo import _Galileo
@@ -109,8 +109,12 @@ _TARGET_STARS = re.compile(r'(HD 151288|PLEIADES|SIRIUS|[A-Z]{3}_[A-Z]{3})$')
 # What the C kernels could not supply, as the OopsSpiceError for missing pointing names it
 _NO_POINTING = 'no Galileo SSI pointing'
 
-# The exceptions that cspyce raises for SPICE data the loaded kernels do not hold
-_SPICE_ERRORS = (LookupError, OSError, RuntimeError, ValueError)
+# The name of the directory that holds a volume's own index tables. The host reads the
+# Ring-Moon Systems Node metadata index instead, which carries the supplement that gives
+# each image's telemetry format and window; a volume's own index has no supplement, and
+# its FILE_SPECIFICATION_NAME begins with the volume ID and names the image file rather
+# than the label.
+_VOLUME_INDEX_DIRECTORY = 'INDEX'
 
 
 class GalileoSSI(oops.Host):
@@ -124,9 +128,10 @@ class GalileoSSI(oops.Host):
 
     @staticmethod
     def from_file(fileinfo, *, full_fov=False, return_all_planets=False,
-                  pds3_options=None, astrometry=False, target=None, lightsource=None,
-                  path=None, frame=None, cadence=None, fov=None, calibrations=None,
-                  timeshift=None, navigation=None, tracker=None, parallel=None, **kwargs):
+                  pds3_options=None, astrometry=False, select=None, target=None,
+                  lightsource=None, path=None, frame=None, cadence=None, fov=None,
+                  calibrations=None, timeshift=None, navigation=None, tracker=None,
+                  parallel=None, **kwargs):
         """A Snapshot object based on a given Galileo SSI image file.
 
         By default, the image and its field of view are trimmed to the label's cutout
@@ -142,8 +147,10 @@ class GalileoSSI(oops.Host):
         header. A header value that the host converts into a PDS3 item, such as EXP into
         EXPOSURE_DURATION, is given only under its PDS3 name. A value that no label read
         gives is left out. The PDS3 null constants UNK, N/A, and NULL, and the header's
-        unset values (a numeric -999, a PICNO or SPICE_C_ID of "?", and time fields that
-        make no valid time) count as no value. Where both labels give a value and
+        unset values (a numeric -999, a PICNO or SPICE_C_ID of "?", a TCA of "CLOSEST
+        TIME", a SMEAR of 0.1, and time fields that make no valid time) count as no
+        value, as do the texts UNKNOWN, NOT APPLICABLE, "---", and an empty string.
+        Where both labels give a value and
         they differ, each item takes its value from one fixed label for every image: the
         VICAR header for EXPOSURE_DURATION and for the pointing and viewing geometry that
         the label rounds or miscomputes (such as DECLINATION, TARGET_CENTER_DISTANCE, and
@@ -155,7 +162,11 @@ class GalileoSSI(oops.Host):
             fileinfo (str | pathlib.Path | FCPath | Pds3Label | VicarLabel | VicarImage):
                 The path to the PDS3 label or the VICAR image file, or its parsed content
                 as a Pds3Label, VicarLabel, or VicarImage, which is read as that kind of
-                input. A path ending in ".lbl", in any case, is a PDS3 label.
+                input. A path ending in ".lbl", in any case, is a PDS3 label. Parsed
+                content that has no file path gives no path subfields; a full read of
+                such a Pds3Label or VicarLabel, which needs the image file, raises an
+                error. A VicarImage with a file path has its header read again from that
+                file, so that `header_dict` holds the header as written.
             full_fov (bool, optional): If True, the full image is returned with a mask
                 describing the regions with no data; otherwise, the image and FOV are
                 trimmed to the label's cutout window.
@@ -167,6 +178,8 @@ class GalileoSSI(oops.Host):
                 True to specify that the returned Observations will only be used for
                 timing and astrometry. In this case, no data arrays are read and returned
                 in the Observation.
+            select (None): Must be None. An SSI image is a single observation, so there
+                is nothing to select from; any other value raises an error.
             target (str | oops.Body, optional): Override for the default target Body of
                 the observation. Use "NONE" for inertial pointing, indicating that no
                 Solar System body was tracked.
@@ -201,8 +214,7 @@ class GalileoSSI(oops.Host):
                 time, different frame and FOV) relative to which this Observation has a
                 fixed offset. Note that no more than one of `parallel` and `tracker` can
                 be specified.
-            **kwargs: Additional keyword arguments; they are accepted and ignored. This
-                includes `select`.
+            **kwargs: Any other keyword argument raises an error.
 
         Returns:
             Snapshot: The observation, with `data` inserted unless `astrometry` is True,
@@ -222,10 +234,11 @@ class GalileoSSI(oops.Host):
               writes it, each set as a list in label order, no key whose value is None,
               such as END, and none of the keys that the parser adds beside the
               keywords (such as "^IMAGE_offset" and "IMAGE_TIME_fmt").
-            - `header_dict`: every parameter of the VICAR header, if it was read. A
-              parameter that occurs more than once, such as the TASK of each step of the
-              processing history, is keyed by its name and its occurrence counted from
-              zero, as "TASK[0]", "TASK[1]", and so on.
+            - `header_dict`: every parameter of the VICAR header as the file writes it,
+              if it was read; a full read gives the same values as an astrometry read,
+              including HOST and BHOST. A parameter that occurs more than once, such as
+              the TASK of each step of the processing history, is keyed by its name and
+              its occurrence counted from zero, as "TASK[0]", "TASK[1]", and so on.
             - `host` ("Galileo"), `instrument` ("SSI"), `time_from_sclk` (True if no
               IMAGE_TIME was read, so that the time comes from the spacecraft clock
               count), `window` (the cutout window as zero-based line and sample limits
@@ -238,32 +251,48 @@ class GalileoSSI(oops.Host):
             - `spice_kernels`, `spice_to_frame`, `spice_frame_name`, and
               `spice_frame_id`.
             - `filepath`, `basename`, `abspath`, and `image_url`, which name the image
-              file, also when `fileinfo` is its PDS3 label. `abspath` is absent after an
-              astrometry read of a remote PDS3 label, which never fetches the image,
-              unless an earlier read put the image in the local cache.
+              file, also when `fileinfo` is its PDS3 label, and are absent when the
+              parsed content given has no file path. `abspath` is given only when the
+              image file is local or already in the local cache, so an astrometry read
+              of a remote PDS3 label, which never fetches the image, gives it only if an
+              earlier read put the image in the cache.
 
         Raises:
             oops.OopsSpiceError: If no `frame` is given and the C kernels hold no
                 pointing for the scan platform at the midtime of the exposure (after any
-                `cadence` override). Its message is "no Galileo SSI pointing at <time> for
-                <image file>: <SPICE error code>", and its cause is the SPICE exception.
-            oops.OopsValueError: If `pds3_options` names a parser method other than fast,
-                strict, and loose that the parser rejects, or another invalid option.
+                `cadence` override), or if the time must come from the spacecraft clock
+                count and the clock kernel cannot convert it. The message of the first is
+                "no Galileo SSI pointing at <time> for <image file>: <SPICE error code>",
+                and the cause of either is the SPICE exception.
+            oops.OopsTypeError: If a keyword argument is not one of those listed.
+            oops.OopsValueError: If `select` is not None, or if `pds3_options` names a
+                parser method other than fast, strict, and loose that the parser rejects,
+                or another invalid option.
             oops.host.PdsHostError: If none of the fast, strict, and loose parsers can
                 read the PDS3 label, or if it has no IMAGE pointer.
             oops.host.VicarHostError: If the VICAR header or image cannot be parsed,
                 including an image file shorter than its header says.
             oops.host.HostFormatError: If no label read gives the exposure duration, the
                 telemetry format, or a time (IMAGE_TIME, or the spacecraft clock count
-                and frame duration), if the telemetry format is not one of SSI's, or if
-                the time must come from the spacecraft clock count and FRAME_DURATION is
-                not one of the SSI frame durations.
+                and frame duration), if the telemetry format is not one of SSI's, if the
+                time must come from the spacecraft clock count and FRAME_DURATION is not
+                one of the SSI frame durations, or if a full read is asked of a parsed
+                Pds3Label or VicarLabel that has no file path, with a message that says
+                no file path is known.
             oops.host.WrongHostError: If `fileinfo`, or the parsed label or image given,
                 is not a Galileo SSI PDS3 label or VICAR image.
             FileNotFoundError: If the image file that the PDS3 label names does not
                 exist, unless `astrometry` is True.
             OSError: If a file cannot be read.
         """
+
+        # A mistaken keyword, such as "astrometric", must not be dropped silently
+        if kwargs:
+            raise oops.OopsTypeError(f'unexpected keyword argument for '
+                                     f'GalileoSSI.from_file: {next(iter(kwargs))!r}')
+        if select is not None:
+            raise oops.OopsValueError(f'a Galileo SSI image is one observation; select '
+                                      f'must be None, not {select!r}')
 
         GalileoSSI.initialize()  # define everything the first time through; use defaults
                                  # unless initialize() was called explicitly.
@@ -276,22 +305,33 @@ class GalileoSSI(oops.Host):
         fileinfo = GalileoSSI._parse_fileinfo(fileinfo, pds3_options=pds3_options)
 
         # Read the image file unless this is an astrometry read; never read the label
-        # beside an image file
+        # beside an image file. The header comes from a VicarLabel, never from a
+        # VicarImage, which replaces the HOST and BHOST of the file with the reading
+        # machine's.
         label_dict = None
-        vicar = None
+        header = None
+        data = None
         if isinstance(fileinfo, Pds3Label):
             label_dict = _ssi_labels.label_json(fileinfo.as_dict())
             filepath = GalileoSSI._image_path(fileinfo, find=not astrometry)
             if not astrometry:
-                vicar = GalileoSSI._read_vicar_image(filepath)
+                filepath = GalileoSSI._known_path(filepath, 'PDS3 label')
+                header = GalileoSSI._read_vicar_header(filepath)
+                data = GalileoSSI._read_vicar_image(filepath).data_2d
         else:
-            filepath = FCPath(fileinfo.filepath)
-            vicar = fileinfo
-            if not astrometry and not isinstance(vicar, VicarImage):
-                vicar = GalileoSSI._read_vicar_image(filepath)
+            filepath = None if fileinfo.filepath is None else FCPath(fileinfo.filepath)
+            if isinstance(fileinfo, VicarImage):
+                header = (fileinfo.label if filepath is None
+                          else GalileoSSI._read_vicar_header(filepath))
+                if not astrometry:
+                    data = fileinfo.data_2d
+            else:
+                header = fileinfo
+                if not astrometry:
+                    filepath = GalileoSSI._known_path(filepath, 'VICAR header')
+                    data = GalileoSSI._read_vicar_image(filepath).data_2d
 
-        header_dict = None if vicar is None else _ssi_labels.header_json(vicar)
-        data = None if astrometry else vicar.data_2d
+        header_dict = None if header is None else _ssi_labels.header_json(header)
 
         dict_ = _ssi_labels.merge_items(
             None if label_dict is None else _ssi_labels.label_items(label_dict),
@@ -314,8 +354,7 @@ class GalileoSSI(oops.Host):
         snapshot = GalileoSSI._make_snapshot(dict_, filepath=filepath, data=data,
                                              full_fov=full_fov,
                                              return_all_planets=return_all_planets,
-                                             overrides=overrides, check_pointing=True,
-                                             fetched=vicar is not None)
+                                             overrides=overrides, check_pointing=True)
         if label_dict is not None:
             snapshot.insert_subfield('label_dict', label_dict)
         if header_dict is not None:
@@ -390,9 +429,10 @@ class GalileoSSI(oops.Host):
                 case as in the label; False to name it without touching the file system.
 
         Returns:
-            FCPath: The file named by the label's IMAGE pointer, in the directory of the
-            label. If `find` is True and no file of that name exists, the same name in
-            upper or lower case is used if it exists.
+            FCPath | None: The file named by the label's IMAGE pointer, in the directory
+            of the label. If `find` is True and no file of that name exists, the same
+            name in upper or lower case is used if it exists. None if the label has no
+            file path.
 
         Raises:
             oops.host.PdsHostError: If the label has no IMAGE pointer.
@@ -402,12 +442,55 @@ class GalileoSSI(oops.Host):
         if not isinstance(name, str):
             raise oops.host.PdsHostError(f'no ^IMAGE pointer in Galileo SSI PDS3 label '
                                          f'{label.filepath}')
+        if label.filepath is None:
+            return None
         parent = FCPath(label.filepath).parent
         if find:
             for option in dict.fromkeys((name, name.upper(), name.lower())):
                 if (parent / option).is_file():
                     return parent / option
         return parent / name
+
+    @staticmethod
+    def _known_path(filepath, kind):
+        """The path to the image file, which a full read needs.
+
+        Parameters:
+            filepath (FCPath | None): The image file, or None if no path is known.
+            kind (str): What was given, such as "PDS3 label", named in the error.
+
+        Returns:
+            FCPath: `filepath`.
+
+        Raises:
+            oops.host.HostFormatError: If `filepath` is None.
+        """
+
+        if filepath is None:
+            raise oops.host.HostFormatError(f'no file path is known for the image file '
+                                            f'of this Galileo SSI {kind}')
+        return filepath
+
+    @staticmethod
+    def _read_vicar_header(filepath):
+        """The VICAR header of an image file, as the file writes it.
+
+        Parameters:
+            filepath (FCPath): The image file.
+
+        Returns:
+            VicarLabel: The header.
+
+        Raises:
+            oops.host.VicarHostError: If the file has no valid VICAR header.
+            OSError: If the file cannot be read.
+        """
+
+        try:
+            header = VicarLabel(filepath, strict=False)
+        except VicarError as err:
+            raise oops.host.VicarHostError(f'{err}: {filepath}') from err
+        return header
 
     @staticmethod
     def _read_vicar_image(filepath):
@@ -442,11 +525,15 @@ class GalileoSSI(oops.Host):
         """An iterator over Snapshots, one for each row of a Galileo SSI index file.
 
         The arguments are checked, and the index is read and filtered, when this method is
-        called; each row's Snapshot is built when the iteration reaches that row.
+        called; each row's Snapshot is built when the iteration reaches that row. The
+        iteration ends at the first row that raises an error; `filter` can leave such a
+        row out.
 
         Parameters:
-            filepath (str | pathlib.Path | FCPath): The full path to a Galileo SSI index
-                file or its PDS label.
+            filepath (str | pathlib.Path | FCPath): The full path to the PDS label of a
+                Galileo SSI index of the Ring-Moon Systems Node metadata tree, such as
+                ".../metadata/GO_0xxx/GO_0017/GO_0017_index.lbl". A volume's own index,
+                in its INDEX directory, is not supported.
             supplement (str | pathlib.Path | FCPath | object, optional): The path to the
                 PDS label of the supplemental index file, whose columns are merged into
                 each row; an SSI index needs its supplement. Its rows must name the same
@@ -467,7 +554,8 @@ class GalileoSSI(oops.Host):
                 their values or a set or tuple of values. If provided, only rows of the
                 index in which each named column equals the value, falls in the set of
                 values, or falls in a range defined by a tuple of two values, will be
-                included.
+                included. A column that no row has raises an error, and a row without a
+                named column is left out.
             full_fov (bool, optional): If True, each field of view covers the full image
                 rather than the cutout window.
             return_all_planets (bool, optional): Include kernels for all planets, not just
@@ -523,34 +611,48 @@ class GalileoSSI(oops.Host):
             a Python str, int, float, or list; a PDS3 null such as UNK, a numeric -999,
             the placeholder a column writes for an image that has no such value (the
             supplement's CUT_OUT_WINDOW and TRUTH_WINDOW of -1, -1, -1, -1, its
-            ICT_DESPIKE_THRESHOLD and ICT_QUANTIZATION_STEP_SIZE of -1, and a compression
-            ratio of 0), and the ORBIT_NUMBER of -99 that the index gives a frame taken
-            before the Jupiter tour are left out. The tables' other null constants are
-            kept, because they also mark real values, such as an exposure of 0. No row
-            is dropped, and the C kernels are not checked for pointing.
+            ICT_DESPIKE_THRESHOLD and ICT_QUANTIZATION_STEP_SIZE of -1, a compression
+            ratio of 0, and a SMEAR_MAGNITUDE of 0.1), and the ORBIT_NUMBER of -99 that
+            the index gives a frame taken before the Jupiter tour are left out. The
+            tables' other null constants are kept, because they also mark real values,
+            such as an exposure of 0. The three compression ratios are given under the
+            names that the product labels give them, which the index writes in rotated
+            columns. No row is dropped.
+            The C kernels are not checked for pointing when the Snapshot is built. For an
+            image whose pointing they cannot supply, the default frame raises
+            oops.OopsSpiceError when it is evaluated.
             `filepath`, `basename`, `image_url`, and `abspath` name the image file, as a
             full path or URL: the row's FILE_SPECIFICATION_NAME, with the label's
             extension ".LBL" replaced by ".IMG" in the same case, in the volume directory
             named by its VOLUME_ID. The volume directories are found from the location of
-            `filepath`: beside the volume that holds an index in its INDEX directory;
-            under "volumes" in place of "metadata" for an index in an RMS Node metadata
-            tree (".../metadata/GO_0xxx/GO_0017/GO_0017_index.lbl"); and otherwise in the
-            index's own directory.
+            `filepath`: under "volumes" in place of "metadata" for an index in an RMS
+            Node metadata tree (".../metadata/GO_0xxx/GO_0017/GO_0017_index.lbl"), and
+            otherwise in the index's own directory.
 
         Raises:
             FileNotFoundError: If the supplement does not exist.
             oops.OopsTypeError: If a keyword argument is not one of those listed.
-            oops.OopsValueError: If `select` is not None.
+            oops.OopsValueError: If `select` is not None, if a value in `pds3_options` is
+                invalid, or if `filter` names a column that no row has.
+            oops.OopsTypeError: If a range in `filter` cannot be compared with the values
+                of its column.
             oops.host.HostFormatError: If a row gives no exposure duration or no time
                 (IMAGE_TIME, or the spacecraft clock count and frame duration), or if its
                 time must come from the spacecraft clock count and its FRAME_DURATION is
                 not one of the SSI frame durations; raised when the iteration reaches that
                 row.
-            oops.host.HostIndexError: If `supplement` is None while `row_dicts` is not
-                given; if an index row has no supplement row or a supplement row belongs
-                to no index row; if, where the two tables list the files in different
-                orders, either lists a file twice; or if `supplement` is
-                `oops.Host.SUPPLEMENT` and the name of `filepath` contains no "_index".
+            oops.OopsSpiceError: If a row's time must come from the spacecraft clock count
+                and the clock kernel cannot convert it; raised when the iteration reaches
+                that row.
+            oops.host.HostIndexError: If `filepath` is in a volume's INDEX directory; if
+                `supplement` is None while `row_dicts` is not given; if either table
+                cannot be read as an index table; if an index row has no supplement row
+                or a supplement row belongs to no index row; if, where the two tables
+                list the files in different orders, either lists a file twice; if
+                `supplement` is `oops.Host.SUPPLEMENT` and the name of `filepath`
+                contains no "_index".
+            oops.host.PdsHostError: If the label of the index or of the supplement cannot
+                be parsed.
             oops.host.WrongHostError: If `filepath` is not a Galileo SSI index.
             OSError: If `filepath`, or a `supplement` that is specified, does not exist or
                 cannot be read.
@@ -564,6 +666,11 @@ class GalileoSSI(oops.Host):
             raise oops.OopsValueError(f'each row of a Galileo SSI index is one '
                                       f'observation; select must be None, not '
                                       f'{select!r}')
+        if FCPath(filepath).parent.name.upper() == _VOLUME_INDEX_DIRECTORY:
+            raise oops.host.HostIndexError(f'Galileo SSI reads the Ring-Moon Systems '
+                                           f'Node metadata index, such as '
+                                           f'"GO_0017_index.lbl", not a volume\'s own '
+                                           f'index: {filepath}')
 
         GalileoSSI.initialize()
 
@@ -609,8 +716,7 @@ class GalileoSSI(oops.Host):
                                                 full_fov=full_fov,
                                                 return_all_planets=return_all_planets,
                                                 overrides=overrides,
-                                                default_mode=_INDEX_DEFAULT_MODE,
-                                                fetched=False)
+                                                default_mode=_INDEX_DEFAULT_MODE)
 
         return snapshots()
 
@@ -622,15 +728,12 @@ class GalileoSSI(oops.Host):
             index_path (str | pathlib.Path | FCPath): The index file or its PDS3 label.
 
         Returns:
-            FCPath: The parent of the volume for an index in a volume's INDEX directory;
-            for an index in an RMS Node metadata tree, such as
+            FCPath: For an index in an RMS Node metadata tree, such as
             ".../metadata/GO_0xxx/GO_0017/GO_0017_index.lbl", the matching volume series
             directory, ".../volumes/GO_0xxx"; otherwise the index's own directory.
         """
 
         directory = FCPath(index_path).parent
-        if directory.name.upper() == 'INDEX':
-            return directory.parent.parent
         if directory.parent.parent.name == 'metadata':
             return directory.parent.parent.parent / 'volumes' / directory.parent.name
         return directory
@@ -638,15 +741,15 @@ class GalileoSSI(oops.Host):
     @staticmethod
     def _make_snapshot(dict_, filepath, data=None, *, full_fov=False,
                        return_all_planets=False, overrides, default_mode=None,
-                       check_pointing=False, fetched=True):
+                       check_pointing=False):
         """A Snapshot built from the merged metadata of an image or a row of an index.
 
         Parameters:
             dict_ (dict): The merged metadata of the labels read by :meth:`from_file`, or
                 the items of an index row from `_ssi_labels.row_items()`; either holds no
                 null value.
-            filepath (FCPath | str): The path to the file, or for an index row, the
-                VOLUME_ID and FILE_SPECIFICATION_NAME joined by a slash.
+            filepath (FCPath | None): The path to the image file, as a full path or URL
+                for an index row; None if no path is known, to give no path subfields.
             data (numpy.ndarray, optional): The full image array; None to omit the `data`
                 subfield.
             full_fov (bool, optional): True to keep the full FOV and image; False to trim
@@ -661,9 +764,8 @@ class GalileoSSI(oops.Host):
                 none; None to require one.
             check_pointing (bool, optional): True to require that the C kernels give the
                 scan platform's pointing at the midtime of the exposure, unless a frame
-                override is given.
-            fetched (bool, optional): False if the image file was not read; `abspath` is
-                then left out for a remote file that is not already in the local cache.
+                override is given; False to give the Snapshot a frame that raises
+                oops.OopsSpiceError when it is evaluated if they do not.
 
         Returns:
             Snapshot: The observation, with the subfields listed for :meth:`from_file`.
@@ -676,7 +778,8 @@ class GalileoSSI(oops.Host):
                 not one of the SSI frame durations.
             oops.OopsSpiceError: If `check_pointing` is True, no frame override is given,
                 and the C kernels hold no pointing for the scan platform at the midtime of
-                the exposure.
+                the exposure; or if the time must come from the spacecraft clock count
+                and the clock kernel cannot convert it.
         """
 
         # PDS3 labels and index rows use the same names
@@ -753,20 +856,18 @@ class GalileoSSI(oops.Host):
             'calibrations': [],         # TBD
         }
 
-        # Apply standard overrides
-        oops.Host._apply_overrides(params, filepath, **overrides)
-
         # Check the pointing at the middle of the exposure the Snapshot will have, which a
-        # cadence override can change
-        if using_cks and check_pointing:
-            GalileoSSI._check_pointing(params['cadence'].midtime, filepath)
+        # cadence override can change. An index row is kept without its pointing; its
+        # frame raises the error when it is used.
+        if using_cks:
+            cadence = (params['cadence'] if overrides['cadence'] is None
+                       else overrides['cadence'])
+            params['frame'] = oops.Host._check_spice_frame(
+                params['frame'], cadence.midtime, description=_NO_POINTING,
+                filepath=filepath, defer=not check_pointing)
 
-        # An astrometry read of a remote label, and an index row, never fetch the image,
-        # so its local path would name a file not in the cache unless an earlier read put
-        # it there
-        if (not fetched and not isinstance(filepath, str) and not filepath.is_local()
-                and not params['abspath'].exists()):
-            del params['abspath']
+        # Apply standard overrides, including the path subfields
+        oops.Host._apply_overrides(params, filepath, **overrides)
 
         obs = oops.observation.Snapshot(('v', 'u'), **params)
         if data is not None:
@@ -796,29 +897,6 @@ class GalileoSSI(oops.Host):
         return obs
 
     @staticmethod
-    def _check_pointing(time, filepath):
-        """Raise OopsSpiceError unless the C kernels give the scan platform's pointing.
-
-        Parameters:
-            time (float): The time in seconds TDB.
-            filepath (FCPath): The image file, named in the error.
-
-        Raises:
-            oops.OopsSpiceError: If the scan platform frame cannot be evaluated at `time`.
-                Its message is "no Galileo SSI pointing at <time> for <file>: <code>",
-                with the SPICE error code, such as "SPICE(CKINSUFFDATA)", and its cause
-                is the exception that cspyce raised.
-        """
-
-        frame = oops.Frame.as_frame(_SPICE_FRAME_NAME)
-        try:
-            frame.transform_at_time(time)
-        except _SPICE_ERRORS as err:
-            raise oops.OopsSpiceError.from_spice_error(err, description=_NO_POINTING,
-                                                       time=time,
-                                                       filepath=filepath) from err
-
-    @staticmethod
     def _tstart_from_sclk(sclk, frame_duration, exposure_type, filepath):
         """The start of the exposure derived from the spacecraft clock count.
 
@@ -833,7 +911,8 @@ class GalileoSSI(oops.Host):
                 SPICE form "RRRRRRRR:MM:S:T".
             frame_duration (float | str): The FRAME_DURATION in seconds.
             exposure_type (str | None): The EXPOSURE_TYPE; None is taken as "NORMAL".
-            filepath (FCPath | str): The image file, named in an error.
+            filepath (FCPath | None): The image file, named in an error; None if it is
+                not known.
 
         Returns:
             float: The start of the exposure in seconds TDB.
@@ -841,6 +920,7 @@ class GalileoSSI(oops.Host):
         Raises:
             oops.host.HostFormatError: If FRAME_DURATION is not one of the SSI frame
                 durations.
+            oops.OopsSpiceError: If the clock kernel cannot convert the count.
         """
 
         frame_duration = float(frame_duration)
@@ -849,7 +929,7 @@ class GalileoSSI(oops.Host):
             raise oops.host.HostFormatError(f'unrecognized Galileo SSI FRAME_DURATION '
                                             f'{frame_duration} for {filepath}')
 
-        tstart = _Galileo.tdb_from_sclk(sclk) + _SHUTTER_DELAY[nominal]
+        tstart = _Galileo.tdb_from_sclk(sclk, filepath=filepath) + _SHUTTER_DELAY[nominal]
         phase1 = int(_SCLK_SEPARATORS.split(sclk.strip())[0]) < _PHASE2_FIRST_RIM
         if exposure_type == 'EXTENDED' and phase1:
             tstart -= nominal
@@ -879,12 +959,15 @@ class GalileoSSI(oops.Host):
     def _detect_in_index(label):
         """True if the given index label refers to this host/instrument.
 
-        A Galileo SSI index label names the host and instrument at its top level, so
-        unlike the other detectors, this one never needs to look at the rows.
+        The label of an RMS Node metadata index names the host and instrument at its top
+        level. A volume's own index label does not, so for that label this detector
+        returns None, and the host is judged from a row by :meth:`_detect_in_row`.
         """
 
-        return (label.get('INSTRUMENT_HOST_NAME', '').startswith('GALILEO')
-                and label.get('INSTRUMENT_ID', '') == 'SSI')
+        host = label.get('INSTRUMENT_HOST_NAME')
+        if host is None:
+            return None
+        return host.startswith('GALILEO') and label.get('INSTRUMENT_ID', '') == 'SSI'
 
     @staticmethod
     def _detect_in_row(row_dict):
@@ -907,8 +990,10 @@ class GalileoSSI(oops.Host):
         to this function are ignored.
 
         Parameters:
-            planets (list, optional): A list of planets to pass to
-                :meth:`~oops.Body.define_solar_system`. None or 0 means all.
+            planets (int | collections.abc.Sequence[int], optional): The number of one
+                planet, from 1 for Mercury to 9 for Pluto, or a sequence of such numbers,
+                such as (5,) for Jupiter alone; each planet and its moons are defined
+                through :meth:`~oops.Body.define_solar_system`. None or 0 means all.
             asof (str, optional): Only use SPICE kernels that existed before this date;
                 None to ignore.
             irregulars (bool, optional): True to include the irregular satellites; False

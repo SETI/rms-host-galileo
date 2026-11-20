@@ -15,7 +15,7 @@ The detectors and support methods that a Host subclass overrides or calls, such 
 """
 
 import pathlib
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from typing import Any
 
 from filecache import FCPath
@@ -40,17 +40,20 @@ class GalileoSSI(Host):
     # is read alone and the image file need not exist. A value that no label read gives
     # has no subfield and no dict key; each item that both give takes its value from one
     # fixed label. A label or VICAR header that cannot be parsed, or a label with no
-    # IMAGE pointer, raises oops.host.PdsHostError or VicarHostError (subclasses of
-    # HostFormatError), as does an image for which no label read gives the exposure, the
-    # time, or the telemetry format; a missing image file behind a label raises
-    # FileNotFoundError. Unless a frame is given, an image whose pointing the C kernels do
-    # not hold raises oops.OopsSpiceError, whose cause is the SPICE exception.
+    # IMAGE pointer, raises oops.host.PdsHostError or VicarHostError, both subclasses of
+    # HostFormatError. HostFormatError itself is raised for an image for which no label
+    # read gives the exposure, the time, or the telemetry format, and for a full read of
+    # parsed content that has no file path. A missing image file behind a label raises
+    # FileNotFoundError. select must be None (oops.OopsValueError), and any other keyword
+    # raises oops.OopsTypeError. Unless a frame is given, an image whose pointing the C
+    # kernels do not hold raises oops.OopsSpiceError, whose cause is the SPICE exception.
     @staticmethod
     def from_file(  # type: ignore[override]
         fileinfo: str | pathlib.Path | FCPath | Pds3Label | VicarLabel
         | VicarImage, *,
         full_fov: bool = False, return_all_planets: bool = False,
         pds3_options: dict[str, Any] | None = None, astrometry: bool = False,
+        select: int | slice | str | tuple[int | slice | str, ...] | None = None,
         target: str | Body | None = None, lightsource: LightSource | None = None,
         path: str | Path | None = None, frame: str | Frame | None = None,
         cadence: Cadence | None = None, fov: FOV | None = None,
@@ -58,10 +61,12 @@ class GalileoSSI(Host):
         timeshift: tuple[float, str] | None = None,
         navigation: tuple[float, ...] | None = None, tracker: str | None = None,
         parallel: Observation | None = None, **kwargs: Any) -> Snapshot: ...
-    # Every row is one Snapshot. The supplement is required: None raises
-    # oops.host.HostIndexError unless row_dicts is given. select must be None
-    # (oops.OopsValueError), and any other keyword raises oops.OopsTypeError. The
-    # iterator builds each row's Snapshot when it reaches the row.
+    # Every row is one Snapshot. The index is the Ring-Moon Systems Node metadata index;
+    # one in a volume's INDEX directory raises oops.host.HostIndexError. The supplement
+    # is required: None raises oops.host.HostIndexError unless row_dicts is given. select
+    # must be None (oops.OopsValueError), and any other keyword raises
+    # oops.OopsTypeError. The iterator builds each row's Snapshot when it reaches the row
+    # and ends at the first row that raises.
     @staticmethod
     def from_index(
         filepath: str | pathlib.Path | FCPath, *,
@@ -80,7 +85,7 @@ class GalileoSSI(Host):
         navigation: tuple[float, ...] | None = None, tracker: str | None = None,
         parallel: Observation | None = None, **kwargs: Any) -> Iterator[Snapshot]: ...
     @staticmethod
-    def initialize(*, planets: list[Any] | None = None, asof: str | None = None,
+    def initialize(*, planets: int | Sequence[int] | None = None, asof: str | None = None,
         irregulars: bool = True) -> None: ...
 
 ##########################################################################################

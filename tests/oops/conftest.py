@@ -5,7 +5,8 @@
 
 Every spicedb function the package calls is replaced by :class:`FakeSpiceDB`, and the
 oops and cspyce calls that would read SPICE kernels are replaced by kernel-free
-equivalents. Everything else, including oops itself, runs for real.
+equivalents. Each test has its own empty file cache. Everything else, including oops
+itself, runs for real.
 """
 
 import pathlib
@@ -14,10 +15,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import cspyce
+import filecache.file_cache_path
 import julian
 import oops
 import pytest
 import spicedb
+from filecache import FileCache
 
 import host_galileo.oops._galileo as galileo_module
 from host_galileo.oops.ssi import GalileoSSI
@@ -247,6 +250,20 @@ def fake_spice(monkeypatch: pytest.MonkeyPatch) -> FakeSpice:
     monkeypatch.setattr(oops.Frame, '_FRAME_REGISTRY', dict(oops.Frame._FRAME_REGISTRY))
     monkeypatch.setattr(oops.Frame, '_FRAME_CACHE', dict(oops.Frame._FRAME_CACHE))
     return fake
+
+
+@pytest.fixture(autouse=True)
+def file_cache(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> pathlib.Path:
+    """Give every FCPath an empty file cache of this test's own; return its directory.
+
+    The default cache is shared by every process on the machine, so a file that another
+    run left there would otherwise change what a test sees. Setting FILECACHE_CACHE_ROOT
+    is not enough, because the default cache is built once per process.
+    """
+
+    cache = FileCache(cache_root=tmp_path / 'file_cache', delete_on_exit=False)
+    monkeypatch.setattr(filecache.file_cache_path, '_DEFAULT_FILECACHE', cache)
+    return pathlib.Path(cache.cache_dir)
 
 
 @pytest.fixture(autouse=True)

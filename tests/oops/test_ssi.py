@@ -82,7 +82,9 @@ def write_pds3_label(directory: pathlib.Path, stem: str, *, record: int = 1,
     return write_text(directory / f'{stem}.LBL', lines)
 
 
+# HOST is the archive's, not the machine's that writes or reads the test file
 _VICAR_LABEL: dict[str, int | float | str | list[int]] = {
+    'HOST'          : 'AXP-VMS',
     'MISSION'       : 'GALILEO',
     'SENSOR'        : 'SSI',
     'RIM'           : 3496321,
@@ -150,15 +152,16 @@ OVERRIDE_NAMES = ('target', 'lightsource', 'path', 'frame', 'cadence', 'fov',
                   'calibrations', 'timeshift', 'navigation', 'tracker', 'parallel')
 
 
-def make_snapshot(dict_: dict[str, Any], *, filepath: str = 'X.LBL', data: Any = None,
+def make_snapshot(dict_: dict[str, Any], *, filepath: str = 'X.IMG', data: Any = None,
                   full_fov: bool = False, return_all_planets: bool = False,
                   default_mode: str | None = None,
                   **overrides: Any) -> oops.observation.Snapshot:
-    """A Snapshot from `_make_snapshot`, with every override not given set to None."""
+    """A Snapshot from `_make_snapshot` for the image file `filepath`, with every override
+    not given set to None."""
 
     GalileoSSI.initialize()
     obs: oops.observation.Snapshot = GalileoSSI._make_snapshot(
-        dict_, filepath=filepath, data=data, full_fov=full_fov,
+        dict_, filepath=FCPath(filepath), data=data, full_fov=full_fov,
         return_all_planets=return_all_planets, default_mode=default_mode,
         overrides={name: overrides.get(name) for name in OVERRIDE_NAMES})
     return obs
@@ -168,7 +171,7 @@ def snapshot(**changes: Any) -> oops.observation.Snapshot:
     """A Snapshot made from the test label as an index row, without any file."""
 
     return make_snapshot(_ssi_labels.row_items(label_dict(**changes)),
-                         filepath='GO_0017/X.LBL')
+                         filepath='GO_0017/X.IMG')
 
 
 def tdb_from_image_time(image_time: str = IMAGE_TIME) -> float:
@@ -256,9 +259,9 @@ def test_detect_in_vicar(label: dict[str, str], expected: bool) -> None:
       'IMAGE_INDEX_TABLE': {'ROWS': 1}}, True),
     ({'INSTRUMENT_HOST_NAME': 'GALILEO', 'INSTRUMENT_ID': 'NIMS'}, False),
     ({'INSTRUMENT_HOST_NAME': 'CASSINI ORBITER', 'INSTRUMENT_ID': 'SSI'}, False),
-    ({'IMAGE_INDEX_TABLE': {'ROWS': 1}}, False),
+    ({'IMAGE_INDEX_TABLE': {'ROWS': 1}}, None),
 ], ids=['ssi', 'other-instrument', 'other-host', 'unnamed'])
-def test_detect_in_index(label: dict[str, Any], expected: bool) -> None:
+def test_detect_in_index(label: dict[str, Any], expected: bool | None) -> None:
     assert GalileoSSI._detect_in_index(label) is expected
 
 
@@ -384,8 +387,8 @@ def test_snapshot_subfields() -> None:
     assert obs.label_target == 'GANYMEDE'
     assert obs.observation_id == 'G1GSGLOBAL02'
     assert obs.dict['TARGET_NAME'] == 'GANYMEDE'
-    assert obs.filepath == 'GO_0017/X.LBL'
-    assert obs.basename == 'X.LBL'
+    assert obs.filepath == FCPath('GO_0017/X.IMG')
+    assert obs.basename == 'X.IMG'
 
 
 def test_snapshot_spice_subfields(fake_spicedb: FakeSpiceDB) -> None:
@@ -462,8 +465,9 @@ def test_snapshot_default_telemetry_format() -> None:
     assert obs.fov is GalileoSSI._FOVS['NONE']
 
 
-def test_snapshot_index_null_is_no_value() -> None:
-    obs = snapshot(IMAGE_TIME='UNK')
+@pytest.mark.parametrize('placeholder', ['UNK', 'UNKNOWN', '---', ''])
+def test_snapshot_index_null_is_no_value(placeholder: str) -> None:
+    obs = snapshot(IMAGE_TIME=placeholder)
     assert obs.time_from_sclk is True
 
 
@@ -565,7 +569,7 @@ def test_missing_exposure_type_is_normal() -> None:
 def test_unknown_frame_duration_is_rejected() -> None:
     with pytest.raises(oops.host.HostFormatError,
                        match=r'unrecognized Galileo SSI FRAME_DURATION 20\.0 for '
-                             r'GO_0017/X\.LBL'):
+                             r'GO_0017/X\.IMG'):
         snapshot(IMAGE_TIME='UNK', FRAME_DURATION=20.)
 
 ##########################################################################################
@@ -816,6 +820,64 @@ def test_from_file_rejects_other_hosts(tmp_path: pathlib.Path) -> None:
     with pytest.raises(oops.host.WrongHostError, match='not a Galileo SSI PDS3 label'):
         GalileoSSI.from_file(path, astrometry=True)
 
+
+def test_from_file_rejects_an_unknown_keyword(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(oops.OopsTypeError,
+                       match=r"unexpected keyword argument for GalileoSSI\.from_file: "
+                             r"'astrometric'"):
+        GalileoSSI.from_file(write_vicar_image(tmp_path), astrometric=True)
+
+
+@pytest.mark.parametrize('select', [0, slice(None), 'data'])
+def test_from_file_refuses_select(tmp_path: pathlib.Path, select: Any) -> None:
+    with pytest.raises(oops.OopsValueError,
+                       match='a Galileo SSI image is one observation; select must be '
+                             'None'):
+        GalileoSSI.from_file(write_vicar_image(tmp_path), select=select)
+
+##########################################################################################
+# from_file(): parsed content without a file path
+##########################################################################################
+
+
+def parsed_without_path(tmp_path: pathlib.Path, kind: str) -> Any:
+    """The test product parsed from its content, so that it has no file path."""
+
+    label_path = write_pds3_image(tmp_path)
+    image_path = tmp_path / 'C0349632100R.IMG'
+    if kind == 'label':
+        return Pds3Label(label_path.read_text())
+    if kind == 'header':
+        return vicar.VicarLabel(cast(str, vicar.VicarLabel.read_label(image_path)))
+    vic = cast(vicar.VicarImage, vicar.VicarImage.from_file(image_path, strict=False))
+    vic.filepath = None
+    return vic
+
+
+@pytest.mark.parametrize(('kind', 'astrometry'), [
+    ('label', True), ('header', True), ('image', True), ('image', False),
+])
+def test_parsed_content_without_a_path_has_no_path_subfields(
+        tmp_path: pathlib.Path, kind: str, astrometry: bool) -> None:
+    obs = GalileoSSI.from_file(parsed_without_path(tmp_path, kind), astrometry=astrometry)
+    assert [name for name in ('filepath', 'basename', 'abspath', 'image_url')
+            if hasattr(obs, name)] == []
+
+
+def test_parsed_image_without_a_path_gives_its_data(tmp_path: pathlib.Path) -> None:
+    obs = GalileoSSI.from_file(parsed_without_path(tmp_path, 'image'), full_fov=True)
+    assert np.array_equal(obs.data, image_array())
+
+
+@pytest.mark.parametrize(('kind', 'name'), [('label', 'PDS3 label'),
+                                            ('header', 'VICAR header')])
+def test_full_read_of_parsed_content_needs_a_path(tmp_path: pathlib.Path, kind: str,
+                                                  name: str) -> None:
+    with pytest.raises(oops.host.HostFormatError,
+                       match=f'no file path is known for the image file of this Galileo '
+                             f'SSI {name}'):
+        GalileoSSI.from_file(parsed_without_path(tmp_path, kind))
+
 ##########################################################################################
 # from_file(): what is read
 ##########################################################################################
@@ -852,6 +914,14 @@ def test_label_input_header_dict(tmp_path: pathlib.Path) -> None:
     obs = GalileoSSI.from_file(write_pds3_image(tmp_path))
     image = tmp_path / 'C0349632100R.IMG'
     assert obs.header_dict == _ssi_labels.header_json(vicar.VicarLabel(image))
+
+
+# rms-vicar's VicarImage replaces the file's HOST with the reading machine's
+def test_parsed_image_header_dict_is_the_files(tmp_path: pathlib.Path) -> None:
+    path = write_vicar_image(tmp_path)
+    vic = cast(vicar.VicarImage, vicar.VicarImage.from_file(path, strict=False))
+    vic.filepath = path
+    assert GalileoSSI.from_file(vic).header_dict['HOST'] == 'AXP-VMS'
 
 
 # The processing history repeats TASK, USER, and DAT_TIM for each step
@@ -987,27 +1057,43 @@ def test_label_input_rejects_an_invalid_image(tmp_path: pathlib.Path) -> None:
         GalileoSSI.from_file(path)
 
 
-def test_local_label_astrometry_without_the_image_names_it(
+def test_local_label_astrometry_without_the_image_has_no_abspath(
         tmp_path: pathlib.Path) -> None:
     path = write_pds3_image(tmp_path)
     (tmp_path / 'C0349632100R.IMG').unlink()
     obs = GalileoSSI.from_file(path, astrometry=True)
-    assert obs.abspath == (tmp_path / 'C0349632100R.IMG').resolve()
+    assert (obs.basename, hasattr(obs, 'abspath')) == ('C0349632100R.IMG', False)
 
 
-# Treated as remote, the image file named by the label is a file not in the cache unless
-# the full read fetched it or an earlier read left it there
-@pytest.mark.parametrize(('astrometry', 'cached', 'has_abspath'),
-                         [(True, False, False), (True, True, True), (False, True, True)],
-                         ids=['astrometry', 'astrometry-cached', 'full'])
-def test_remote_label_abspath(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch,
-                              astrometry: bool, cached: bool, has_abspath: bool) -> None:
-    path = write_pds3_image(tmp_path)
-    if not cached:
-        (tmp_path / 'C0349632100R.IMG').unlink()
-    monkeypatch.setattr(FCPath, 'is_local', lambda self: False)
-    obs = GalileoSSI.from_file(path, astrometry=astrometry)
-    assert hasattr(obs, 'abspath') is has_abspath
+_REMOTE = 'https://pds.example.org/volumes/GO_0xxx/GO_0017/G1/GANYMEDE'
+
+
+def put_in_cache(url: str, content: bytes) -> None:
+    """Write `content` where the test's file cache keeps the remote file `url`."""
+
+    local = cast(pathlib.Path, FCPath(url).get_local_path(create_parents=False))
+    local.parent.mkdir(parents=True, exist_ok=True)
+    local.write_bytes(content)
+
+
+def cache_remote_product(tmp_path: pathlib.Path, *, image: bool) -> FCPath:
+    """Put the test product's label, and its image file if `image` is True, in the local
+    cache of the remote directory `_REMOTE`; return the label's URL."""
+
+    write_pds3_image(tmp_path)
+    names = ['C0349632100R.LBL'] + (['C0349632100R.IMG'] if image else [])
+    for name in names:
+        put_in_cache(f'{_REMOTE}/{name}', (tmp_path / name).read_bytes())
+    return FCPath(f'{_REMOTE}/C0349632100R.LBL')
+
+
+# abspath names the image file only where it is local or in the cache: an astrometry
+# read of a remote label never fetches it
+@pytest.mark.parametrize('cached', [False, True], ids=['not-cached', 'cached'])
+def test_remote_label_astrometry_abspath(tmp_path: pathlib.Path, cached: bool) -> None:
+    label = cache_remote_product(tmp_path, image=cached)
+    obs = GalileoSSI.from_file(label, astrometry=True)
+    assert hasattr(obs, 'abspath') is cached
 
 
 def test_label_without_an_image_pointer(tmp_path: pathlib.Path) -> None:
@@ -1110,6 +1196,25 @@ def test_from_index_needs_no_pointing(tmp_path: pathlib.Path,
     monkeypatch.setattr(oops.Frame.as_frame('GLL_SCAN_PLATFORM'), 'transform_at_time',
                         no_pointing)
     assert len(list(GalileoSSI.from_index(write_volume(tmp_path)))) == 3
+
+
+@pytest.mark.usefixtures('initialized_ssi')
+def test_from_index_frame_without_pointing_raises_when_used(
+        tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    GalileoSSI._define_camera_frame()
+    monkeypatch.setattr(oops.Frame.as_frame('GLL_SCAN_PLATFORM'), 'transform_at_time',
+                        no_pointing)
+    obs = list(GalileoSSI.from_index(write_volume(tmp_path)))[1]
+    with pytest.raises(oops.OopsSpiceError,
+                       match=r'^no Galileo SSI pointing at 1996-06-26T08:46:04\.890 for '
+                             r'.*C0349632100R\.IMG: SPICE\(CKINSUFFDATA\)$'):
+        obs.frame.transform_at_time(obs.midtime)
+
+
+def test_from_index_frame_with_pointing_is_the_scan_platform(
+        tmp_path: pathlib.Path) -> None:
+    obs = list(GalileoSSI.from_index(write_volume(tmp_path)))[1]
+    assert obs.frame.frame_id == 'GLL_SCAN_PLATFORM'
 
 ##########################################################################################
 # from_file(): parsing the PDS3 label
@@ -1472,30 +1577,75 @@ def test_from_index_rows(tmp_path: pathlib.Path) -> None:
 
 
 def test_from_index_names_the_image_in_full(tmp_path: pathlib.Path) -> None:
-    obs = list(GalileoSSI.from_index(write_volume(tmp_path)))[1]
     image = tmp_path / 'GO_0017/G1/GANYMEDE/C0349632100R.IMG'
+    image.parent.mkdir(parents=True)
+    image.write_bytes(b'')
+    obs = list(GalileoSSI.from_index(write_volume(tmp_path)))[1]
     assert (obs.basename, obs.image_url, obs.abspath) == ('C0349632100R.IMG',
                                                           image.as_posix(),
                                                           image.resolve())
 
 
-# Treated as remote, the image file is not in the cache, since an index read fetches none
-def test_from_index_remote_image_has_no_abspath(tmp_path: pathlib.Path,
-                                                monkeypatch: pytest.MonkeyPatch) -> None:
-    index = write_volume(tmp_path)
-    monkeypatch.setattr(FCPath, 'is_local', lambda self: False)
-    assert not hasattr(list(GalileoSSI.from_index(index))[1], 'abspath')
+# An index read fetches no image, so a remote image has abspath only if it is cached
+def test_from_index_remote_image_abspath_only_when_cached(tmp_path: pathlib.Path) -> None:
+    rows = GalileoSSI._read_index_rows(write_index(tmp_path))
+    put_in_cache(f'{_REMOTE}/C0349632100R.IMG', b'')
+    index = 'https://pds.example.org/metadata/GO_0xxx/GO_0017/GO_0017_index.lbl'
+    snapshots = GalileoSSI.from_index(index, row_dicts=rows)
+    assert [hasattr(obs, 'abspath') for obs in snapshots] == [False, True, False]
+
+
+# An index whose volumes are absent leaves the file system as it was
+@pytest.mark.parametrize('remote', [False, True], ids=['local', 'remote'])
+def test_from_index_creates_no_directories(tmp_path: pathlib.Path, remote: bool) -> None:
+    (tmp_path / 'metadata').mkdir()
+    index: pathlib.Path | FCPath = write_volume(tmp_path / 'metadata')
+    rows = GalileoSSI._read_index_rows(index)
+    if remote:
+        index = FCPath('https://pds.example.org/metadata/GO_0017_index.lbl')
+    before = sorted(tmp_path.rglob('*'))
+    snapshots = list(GalileoSSI.from_index(index, row_dicts=rows))
+    assert [hasattr(obs, 'abspath') for obs in snapshots] == [False, False, False]
+    assert sorted(tmp_path.rglob('*')) == before
 
 
 @pytest.mark.parametrize(('index', 'volumes'), [
-    ('/h/volumes/GO_0xxx/GO_0017/INDEX/IMGINDEX.LBL', '/h/volumes/GO_0xxx'),
     ('/h/metadata/GO_0xxx/GO_0017/GO_0017_index.lbl', '/h/volumes/GO_0xxx'),
     ('https://h.org/metadata/GO_0xxx/GO_0017/GO_0017_index.lbl',
      'https://h.org/volumes/GO_0xxx'),
     ('/h/GO_0017_index.lbl', '/h'),
-], ids=['volume-index', 'metadata', 'metadata-url', 'other'])
+], ids=['metadata', 'metadata-url', 'other'])
 def test_volumes_directory(index: str, volumes: str) -> None:
     assert str(GalileoSSI._volumes_directory(index)) == volumes
+
+
+def write_volume_index(volume: pathlib.Path) -> pathlib.Path:
+    """Write the SSI index as a volume's own index, in its INDEX directory, whose label
+    does not name the instrument host; return the label's path."""
+
+    (volume / 'INDEX').mkdir(parents=True)
+    return write_table(volume / 'INDEX', 'IMGINDEX', 'IMAGE_INDEX_TABLE',
+                       _INDEX_COLUMNS, _INDEX_ROWS)
+
+
+_VOLUME_INDEX_ERROR = (r'Galileo SSI reads the Ring-Moon Systems Node metadata index, '
+                       r'such as "GO_0017_index\.lbl", not a volume\'s own index: '
+                       r'.*GO_0017/INDEX/IMGINDEX\.lbl')
+
+
+@pytest.mark.parametrize('given_rows', [False, True], ids=['read', 'row-dicts'])
+def test_from_index_refuses_a_volumes_own_index(tmp_path: pathlib.Path,
+                                                given_rows: bool) -> None:
+    index = write_volume_index(tmp_path / 'GO_0017')
+    rows = GalileoSSI._read_index_rows(index) if given_rows else None
+    with pytest.raises(oops.host.HostIndexError, match=_VOLUME_INDEX_ERROR):
+        GalileoSSI.from_index(index, row_dicts=rows)
+
+
+def test_host_from_index_refuses_a_volumes_own_index(tmp_path: pathlib.Path) -> None:
+    index = write_volume_index(tmp_path / 'GO_0017')
+    with pytest.raises(oops.host.HostIndexError, match=_VOLUME_INDEX_ERROR):
+        oops.Host.from_index(index)
 
 
 def test_from_index_requires_the_supplement_beside_it(tmp_path: pathlib.Path) -> None:
