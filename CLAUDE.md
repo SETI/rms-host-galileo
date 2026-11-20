@@ -123,7 +123,10 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   (sections C and D, for targets other than a planet or asteroid and for images without
   SPICE data): `_PDS3_FILLS` (`CONE_ANGLE`, `SMEAR_AZIMUTH`, `CENTER_RING_RADIUS`,
   `CENTRAL_BODY_DISTANCE`, `HORIZONTAL_PIXEL_SCALE`, `VERTICAL_PIXEL_SCALE`, and
-  `SLANT_DISTANCE` 0, `SOLAR_DISTANCE` 777909100), the two times from closest approach
+  `SLANT_DISTANCE` 0, `SOLAR_DISTANCE` 777909100), a negative value of
+  `_NEVER_NEGATIVE` (the pixel scales and slant distance, under their PDS3 and VICAR
+  names; the index's cut-short negative values are dropped by the same rule until the
+  index is corrected), the two times from closest approach
   that begin with `-73T` (`_UNKNOWN_TIME_ITEMS`), and each of `_ZERO_GROUPS` (the
   pointing; `CENTER_LATITUDE`/`CENTER_LONGITUDE`; `INTERCEPT_POINT_LATITUDE`/`LONGITUDE`,
   which the header's `LAT` and `LON` become; the three azimuths) when the source gives

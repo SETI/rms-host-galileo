@@ -63,6 +63,23 @@ _PDS3_FILLS = {'CENTER_RING_RADIUS': 0., 'CONE_ANGLE': 0., 'SMEAR_AZIMUTH': 0.,
                'HORIZONTAL_PIXEL_SCALE': 0., 'VERTICAL_PIXEL_SCALE': 0.,
                'SLANT_DISTANCE': 0.}
 
+# The items, under their PDS3 and VICAR names, that are never negative. A survey of all
+# 14,672 labels and headers found 128 GO_0017 headers with HSCL = VSCL = -999000, two of
+# whose labels (C3/RINGS/C0368976000R and C0368992339R) give HORIZONTAL_PIXEL_SCALE =
+# VERTICAL_PIXEL_SCALE = -9.99e5, and one GO_0018 product (E4/EUROPA/C0374667300R) whose
+# label gives SLANT_DISTANCE = -547825 and header SLRANGE = -547825, none of them
+# declared as a fill (rms-data-projects #259, item 11). A negative value of these items is
+# no value. The indexes write these columns as E12.6 and cut the last digit of a negative
+# value with a two-digit exponent, so their rows for the same products give both pixel
+# scales -9.99 (2 rows of GO_0017, and the same 2 of GO_0999) and SLANT_DISTANCE -5.47825
+# (1 row of GO_0018, and the same row of GO_0999) (rms-data-projects #258, item 15).
+# These are the only negative values with a cut exponent in the 23 indexes. Until the
+# index is
+# corrected, the same rule drops those values; a corrected row writes the null constant
+# -999, which is dropped as well.
+_NEVER_NEGATIVE = ('HORIZONTAL_PIXEL_SCALE', 'VERTICAL_PIXEL_SCALE', 'SLANT_DISTANCE',
+                   'HSCL', 'VSCL', 'SLRANGE')
+
 # The groups of items that DATASET.CAT lists as 0 where the value is not available: the
 # pointing, when the C kernels had none for the image (section D; 93 labels and headers);
 # the latitude and longitude of the image center (CENTER_LATITUDE and CENTER_LONGITUDE in
@@ -426,16 +443,19 @@ def label_items(label_dict):
 
 
 def drop_fills(items):
-    """Remove the values that the archive documents as standing for no value.
+    """Remove the values that the archive documents as standing for no value, and the
+    negative pixel scales and slant distances.
 
     The same rules apply to the items of a PDS3 label, of a VICAR header once its values
     have their PDS3 names, and of an index row.
 
     Parameters:
-        items (dict): The items of one source under their PDS3 names, modified in place.
-            These are removed: a CONE_ANGLE, SMEAR_AZIMUTH, CENTER_RING_RADIUS,
+        items (dict): The items of one source under their PDS3 names (and a VICAR
+            header's other items under their own names), modified in place. These are
+            removed: a CONE_ANGLE, SMEAR_AZIMUTH, CENTER_RING_RADIUS,
             CENTRAL_BODY_DISTANCE, HORIZONTAL_PIXEL_SCALE, VERTICAL_PIXEL_SCALE, or
-            SLANT_DISTANCE of 0; a SOLAR_DISTANCE of 777909100; an
+            SLANT_DISTANCE of 0; a negative HORIZONTAL_PIXEL_SCALE, VERTICAL_PIXEL_SCALE,
+            SLANT_DISTANCE, HSCL, VSCL, or SLRANGE; a SOLAR_DISTANCE of 777909100; an
             NTV_TIME_FROM_CLOSEST_APPROACH or NTV_SAT_TIME_FROM_CLOSEST_APRH that begins
             with "-73T"; and each of these groups when the items contain at least two of
             its members and every member they contain is 0: RIGHT_ASCENSION,
@@ -455,19 +475,22 @@ def drop_fills(items):
 
 
 def _is_fill(key, value):
-    """True if an item's value is one that the archive documents as no value.
+    """True if an item's value is one that the archive documents as no value, or a
+    negative value of an item that is never negative.
 
     Parameters:
-        key (str): The item's PDS3 name.
+        key (str): The item's PDS3 name, or a VICAR header item's own name.
         value (Any): Its value.
 
     Returns:
-        bool: True for a value of `_PDS3_FILLS` and for a time from closest approach that
-        begins with "-73T".
+        bool: True for a value of `_PDS3_FILLS`, for a negative number in an item of
+        `_NEVER_NEGATIVE`, and for a time from closest approach that begins with "-73T".
     """
 
     if key in _UNKNOWN_TIME_ITEMS:
         return isinstance(value, str) and value.startswith(_UNKNOWN_TIME_PREFIX)
+    if key in _NEVER_NEGATIVE and isinstance(value, (int, float)) and value < 0:
+        return True
     return key in _PDS3_FILLS and value == _PDS3_FILLS[key]
 
 
@@ -494,7 +517,8 @@ def header_items(header_dict):
         (a RAD, CONE, SMRAZ, HSCL, VSCL, SLRANGE, or PLRANGE of 0 and a SOLRANGE of
         777909100, and, under their PDS3 names, the values that :func:`drop_fills`
         removes, such as RA, DEC, and TWIST when all three are 0, and LAT and LON when
-        both are 0), a placeholder text such as NOT APPLICABLE, and a set of time fields
+        both are 0), a negative HSCL, VSCL, or SLRANGE, a placeholder text such as NOT
+        APPLICABLE, and a set of time fields
         that is not a valid time. ORBIT_NUMBER is given only for an observation ID that
         begins with an orbit of the Jupiter tour.
     """

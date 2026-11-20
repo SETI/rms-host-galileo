@@ -128,7 +128,11 @@ declared in one of those columns is left out. Also left out are the
 the values that it documents as not available: the ``HORIZONTAL_PIXEL_SCALE`` and
 ``VERTICAL_PIXEL_SCALE`` of 0 and the time from closest approach of ``-73T69:12:71Z``
 that some rows give. The indexes write -999 for the other values that the labels write
-as 0 where they are not available.
+as 0 where they are not available. A negative ``HORIZONTAL_PIXEL_SCALE``,
+``VERTICAL_PIXEL_SCALE``, or ``SLANT_DISTANCE`` is left out as well, as it is from a
+label. Until the indexes are corrected, this also covers the few rows where the index
+cuts a label's negative value short, such as a pixel scale of -9.99 for the label's
+-999000.
 
 The current SSI indexes write each image's three compression ratios in rotated columns:
 the value in ``ENCODING_COMPRESSION_RATIO`` is the image's maximum ratio, the value in

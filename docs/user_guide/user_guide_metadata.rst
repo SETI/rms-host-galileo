@@ -96,6 +96,9 @@ for it, and never a None or a placeholder in its place. These count as no value:
   ``SLANT_DISTANCE`` of 0 (``PLRANGE``, ``HSCL``, ``VSCL``, and ``SLRANGE`` in the VICAR
   header), and a time from closest approach that begins with ``-73T``, such as
   ``-73T69:12:71Z``;
+- a negative ``HORIZONTAL_PIXEL_SCALE``, ``VERTICAL_PIXEL_SCALE``, or ``SLANT_DISTANCE``
+  (``HSCL``, ``VSCL``, or ``SLRANGE``), which is never real, such as the pixel scales of
+  -999000 that some labels and headers of GO_0017 give;
 - the groups of values that ``DATASET.CAT`` documents as 0 where they are not available,
   when every value of the group that a label gives is 0 and it gives at least two of
   them: ``RIGHT_ASCENSION``, ``DECLINATION``, and ``TWIST_ANGLE`` (``RA``, ``DEC``, and

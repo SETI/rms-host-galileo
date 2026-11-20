@@ -158,7 +158,9 @@ class GalileoSSI(oops.Host):
         CENTER_LATITUDE and CENTER_LONGITUDE; INTERCEPT_POINT_LATITUDE and
         INTERCEPT_POINT_LONGITUDE (LAT and LON); and NORTH_AZIMUTH, SUB_SOLAR_AZIMUTH, and
         SUB_SPACECRAFT_AZIMUTH (NORAZ, SUNAZ, and SCAZ). One value of a group alone at 0
-        is kept. The time from closest approach, which the labels before the Jupiter
+        is kept. A negative HORIZONTAL_PIXEL_SCALE (HSCL), VERTICAL_PIXEL_SCALE (VSCL), or
+        SLANT_DISTANCE (SLRANGE), which is never real, counts as no value too. The time
+        from closest approach, which the labels before the Jupiter
         tour call TIME_FROM_CLOSEST_APPROACH and SATELLITE_TIME_FROM_CLST_APR, is given
         under the tour labels' names, NTV_TIME_FROM_CLOSEST_APPROACH and
         NTV_SAT_TIME_FROM_CLOSEST_APRH, which the header's TCA also takes.
@@ -628,7 +630,8 @@ class GalileoSSI(oops.Host):
             SMEAR_MAGNITUDE of 0.1), the values that the archive documents as standing
             for no value, by the same rules as for a label read by :meth:`from_file`
             (such as a SOLAR_DISTANCE of 777909100 km, a HORIZONTAL_PIXEL_SCALE or
-            VERTICAL_PIXEL_SCALE of 0, a time from closest approach that begins with
+            VERTICAL_PIXEL_SCALE of 0 or less, a negative SLANT_DISTANCE, a time from
+            closest approach that begins with
             "-73T", and a RIGHT_ASCENSION, DECLINATION, and TWIST_ANGLE that are all 0),
             and the ORBIT_NUMBER of -99 that the index gives a frame taken before the
             Jupiter tour. Three values that the tables declare as constants are kept,

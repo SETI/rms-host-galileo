@@ -118,6 +118,15 @@ def test_label_items_documented_fill_is_no_value(key: str, fill: float) -> None:
     assert _ssi_labels.label_items({key: fill}) == {}
 
 
+# A pixel scale or slant distance is never negative: two GO_0017 labels give both pixel
+# scales -999000, and one GO_0018 label a slant distance of -547825
+@pytest.mark.parametrize(('key', 'value'), [('HORIZONTAL_PIXEL_SCALE', -999000.),
+                                            ('VERTICAL_PIXEL_SCALE', -999000.),
+                                            ('SLANT_DISTANCE', -547825.)])
+def test_label_items_negative_value_is_no_value(key: str, value: float) -> None:
+    assert _ssi_labels.label_items({key: value}) == {}
+
+
 @pytest.mark.parametrize('label', [{'SOLAR_DISTANCE': 7.41e8},
                                    {'HORIZONTAL_PIXEL_SCALE': 2024.28}],
                          ids=['solar-distance', 'pixel-scale'])
@@ -244,6 +253,14 @@ def test_header_items_fill_is_no_value(key: str, fill: Any) -> None:
     assert _ssi_labels.header_items({key: fill}) == {}
 
 
+# 128 GO_0017 headers give HSCL and VSCL -999000, and one GO_0018 header an SLRANGE of
+# -547825
+@pytest.mark.parametrize(('key', 'value'), [('HSCL', -999000.), ('VSCL', -999000.),
+                                            ('SLRANGE', -547825.)])
+def test_header_items_negative_value_is_no_value(key: str, value: float) -> None:
+    assert _ssi_labels.header_items({key: value}) == {}
+
+
 @pytest.mark.parametrize('header', [{'RA': 0., 'DEC': 0., 'TWIST': 0.},
                                     {'LAT': 0., 'LON': 0.},
                                     {'NORAZ': 0., 'SUNAZ': 0., 'SCAZ': 0.}],
@@ -360,6 +377,17 @@ def test_row_items_drop_nulls() -> None:
     ('NTV_SAT_TIME_FROM_CLOSEST_APR', np.str_('-73T69:12:71Z ')),
 ])
 def test_row_items_drop_a_placeholder(column: str, value: Any) -> None:
+    assert _ssi_labels.row_items({column: value}) == {}
+
+
+# The index cuts the last digit of a negative value written as E12.6, so the labels'
+# -999000 pixel scales are read as -9.99 and their -547825 slant distance as -5.47825
+@pytest.mark.parametrize(('column', 'value'), [
+    ('HORIZONTAL_PIXEL_SCALE', np.float64(-9.99)),
+    ('VERTICAL_PIXEL_SCALE', np.float64(-9.99)),
+    ('SLANT_DISTANCE', np.float64(-5.47825)),
+])
+def test_row_items_drop_a_negative_value(column: str, value: Any) -> None:
     assert _ssi_labels.row_items({column: value}) == {}
 
 
