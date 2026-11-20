@@ -7,6 +7,7 @@ from collections.abc import Iterator
 import json
 import os
 import pathlib
+import re
 import subprocess
 import sys
 from typing import Any, cast
@@ -1147,8 +1148,9 @@ def test_from_file_without_pointing(tmp_path: pathlib.Path,
                        match=r'^no Galileo SSI pointing at 1996-06-26T08:46:04\.890 for '
                              r'.*C0349632100R\.IMG: SPICE\(CKINSUFFDATA\)$') as info:
         GalileoSSI.from_file(path, astrometry=True)
-    assert (info.value.spice_code, str(info.value.filepath)) == ('SPICE(CKINSUFFDATA)',
-                                                                 str(path))
+    assert info.value.spice_code == 'SPICE(CKINSUFFDATA)'
+    # The image file as the filepath subfield names it, with "/" on every platform
+    assert info.value.filepath == FCPath(path)
     assert type(info.value.__cause__) is OSError
 
 
@@ -1747,10 +1749,11 @@ def test_host_from_index_dispatches_to_ssi(tmp_path: pathlib.Path) -> None:
 
 # The supplement is required, so None is refused rather than taken as "search for it"
 def test_from_index_refuses_no_supplement(tmp_path: pathlib.Path) -> None:
+    index = write_volume(tmp_path)
     with pytest.raises(oops.host.HostIndexError,
-                       match=r'Galileo SSI index needs its supplemental index: '
-                             r'.*GO_0017_index\.lbl'):
-        GalileoSSI.from_index(write_volume(tmp_path), supplement=None)
+                       match=r'^Galileo SSI index needs its supplemental index: '
+                             + re.escape(str(FCPath(index))) + '$'):
+        GalileoSSI.from_index(index, supplement=None)
 
 
 def test_from_index_rows_need_no_supplement(tmp_path: pathlib.Path) -> None:

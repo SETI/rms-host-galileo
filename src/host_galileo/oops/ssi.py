@@ -668,11 +668,14 @@ class GalileoSSI(oops.Host):
             raise oops.OopsValueError(f'each row of a Galileo SSI index is one '
                                       f'observation; select must be None, not '
                                       f'{select!r}')
-        if FCPath(filepath).parent.name.upper() == _VOLUME_INDEX_DIRECTORY:
+        # The messages name the index as an FCPath, as oops.Host.from_index passes it, so
+        # that they read the same on every platform and from either entry point
+        index_path = FCPath(filepath)
+        if index_path.parent.name.upper() == _VOLUME_INDEX_DIRECTORY:
             raise oops.host.HostIndexError(f'Galileo SSI reads the Ring-Moon Systems '
                                            f'Node metadata index, such as '
                                            f'"GO_0017_index.lbl", not a volume\'s own '
-                                           f'index: {filepath}')
+                                           f'index: {index_path}')
 
         GalileoSSI.initialize()
 
@@ -681,7 +684,7 @@ class GalileoSSI(oops.Host):
         if row_dicts is None:
             if supplement is None:
                 raise oops.host.HostIndexError(f'Galileo SSI index needs its '
-                                               f'supplemental index: {filepath}')
+                                               f'supplemental index: {index_path}')
             row_dicts = GalileoSSI._read_index_rows(filepath, supplement=supplement,
                                                     validate=_INDEX_KEYS,
                                                     pds3_options=pds3_options,
