@@ -11,8 +11,9 @@ Reading an image file
 :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file` raises:
 
 :exc:`oops.OopsSpiceError`
-    The C kernels lack the pointing of the scan platform at the middle of the exposure,
-    after any ``cadence`` override and any ``timeshift`` of the cadence. The message
+    The C kernels lack the pointing of the scan platform at the time at which the frame
+    will be evaluated, after any ``cadence`` and ``timeshift`` overrides (see
+    :doc:`user_guide_geometry`). The message
     reads "no Galileo SSI pointing at <time> for <image file>: <code>", ending with the
     SPICE error code, such as ``SPICE(CKINSUFFDATA)``. It is never raised when the
     caller supplies the pointing with the ``frame`` override. The same class is raised
@@ -75,7 +76,9 @@ called:
 
 :exc:`~oops.OopsValueError`
     ``select`` is not None, ``filter`` holds a column that neither table has, or
-    ``pds3_options`` holds an option that the parser does not accept.
+    ``pds3_options`` holds an option that the parser does not accept. When ``row_dicts``
+    is an iterator rather than a sequence, a ``filter`` column that its first row lacks
+    raises this error when the iteration reads that row.
 
 :exc:`~oops.host.WrongHostError`
     The file is not a Galileo SSI index.
@@ -89,10 +92,16 @@ iteration ends there:
 
 :exc:`~oops.host.HostIndexError`
     The index row and the supplement row in the same position give different images; the
-    supplement ends before the index; or the table file lacks a row that its label
-    promises, or a row does not match the label. The message gives the row, counted from
-    0, and both tables. A supplement with rows left over raises the same error after the
-    last row of the index.
+    supplement ends before the index; a table file ends before the last row that its
+    label lists, after every row it holds; or a row is longer than the label says, at the
+    first of the ten rows read with it. The message gives the row, counted from 0, and
+    both tables. A supplement with rows left over, or a table file with more rows than
+    its label lists, raises the same error after the last row of the index.
+
+A value that cannot be read as the number its column describes is given as text, with a
+warning from the table reader, and is not one of these errors; the row's Snapshot may
+then fail as the value is used, for example with a :exc:`TypeError` for the exposure
+duration (see :doc:`user_guide_index`).
 
 :exc:`~oops.host.HostFormatError`
     A row lacks the exposure duration or a time (``IMAGE_TIME``, or the clock count and

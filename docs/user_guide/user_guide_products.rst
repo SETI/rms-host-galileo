@@ -43,5 +43,5 @@ frame when the image has no window.
 Calibration
 ===========
 
-The host gives an SSI image no calibration. The observation's list of calibrations is
-empty unless the caller supplies one with the ``calibrations`` override.
+The observation's list of calibrations is empty unless the caller supplies one with the
+``calibrations`` override, because the host supplies none of its own.

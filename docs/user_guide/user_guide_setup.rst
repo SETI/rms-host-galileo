@@ -78,6 +78,6 @@ Later calls to :meth:`~host_galileo.oops.ssi.GalileoSSI.initialize` are ignored.
 Image files and indexes
 =======================
 
-Each image file, PDS3 label, or index is passed by its path or URL, so the archive
-itself needs no environment variable. A remote file is retrieved and cached when it is
-read.
+Each image file, PDS3 label, or index is passed by its path or URL, so the location of
+the archive is given with each call rather than in an environment variable. A remote
+file is retrieved and cached when it is read.

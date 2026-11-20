@@ -90,10 +90,22 @@ for it, and never a None or a placeholder in its place. These count as no value:
   and a ``SOLAR_DISTANCE`` of 777909100 km, which is Jupiter's distance from the Sun even
   in the images of Venus, the Earth, and Gaspra that give it, together with the VICAR
   header's ``CONE``, ``SMRAZ``, ``RAD``, and ``SOLRANGE`` of the same values;
-- a ``RIGHT_ASCENSION``, ``DECLINATION``, and ``TWIST_ANGLE`` that are all 0 (``RA``,
-  ``DEC``, and ``TWIST`` in the VICAR header), which is how both labels write an image
-  whose pointing the C kernels lacked when the labels were made; one of them alone at 0
-  is a real value and is kept;
+- the values that ``DATASET.CAT`` documents as not available for a target other than a
+  planet or asteroid and for an image without SPICE data, and that are never real: a
+  ``CENTRAL_BODY_DISTANCE``, ``HORIZONTAL_PIXEL_SCALE``, ``VERTICAL_PIXEL_SCALE``, or
+  ``SLANT_DISTANCE`` of 0 (``PLRANGE``, ``HSCL``, ``VSCL``, and ``SLRANGE`` in the VICAR
+  header), and a time from closest approach that begins with ``-73T``, such as
+  ``-73T69:12:71Z``;
+- the groups of values that ``DATASET.CAT`` documents as 0 where they are not available,
+  when every value of the group that a label gives is 0 and it gives at least two of
+  them: ``RIGHT_ASCENSION``, ``DECLINATION``, and ``TWIST_ANGLE`` (``RA``, ``DEC``, and
+  ``TWIST`` in the VICAR header), which is how both labels write an image whose pointing
+  the C kernels lacked when the labels were made; ``CENTER_LATITUDE`` and
+  ``CENTER_LONGITUDE`` (``LAT`` and ``LON`` in the VICAR header, which become
+  ``INTERCEPT_POINT_LATITUDE`` and ``INTERCEPT_POINT_LONGITUDE``), which both labels
+  also write as 0 when the middle of the image misses the target; and
+  ``NORTH_AZIMUTH``, ``SUB_SOLAR_AZIMUTH``, and ``SUB_SPACECRAFT_AZIMUTH`` (``NORAZ``,
+  ``SUNAZ``, and ``SCAZ``). One value of a group alone at 0 is a real value and is kept;
 - a set of VICAR time fields that is not a valid time, such as an hour of 24;
 - an ``ORBIT_NUMBER`` outside the Jupiter tour's orbits 0 to 35. The labels of the
   earlier volumes give the first two characters of the observation ID read as a number,
