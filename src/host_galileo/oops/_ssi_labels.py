@@ -20,16 +20,23 @@ import re
 
 import numpy as np
 
-# The PDS3 constants that stand for a missing value
-_PDS3_NULLS = ('UNK', 'N/A', 'NULL')
+# The texts that stand for a missing value in any source: the PDS3 null constants UNK,
+# N/A, and NULL, and the other placeholders the archive writes (UNKNOWN, NOT APPLICABLE,
+# which 241 of 880 sampled VICAR headers give as their READOUTMODE, "---", and an empty
+# string), compared without case or padding
+_NULL_TEXTS = ('UNK', 'UNKNOWN', 'N/A', 'NULL', 'NOT APPLICABLE', '---', '')
 
 # The value of a numeric VICAR keyword that the header leaves unset, such as SMRAZ; the
 # indexes also write it, as their NULL_CONSTANT, for a missing number
 _VICAR_FILL = -999.
 
-# The value of a VICAR string keyword that the header leaves unset: PICNO in 162 and
-# SPICE_C_ID in 64 of the 14,672 products
-_VICAR_STRING_FILLS = {'PICNO': '?', 'SPICE_C_ID': '?'}
+# The value of a VICAR keyword that the header gives for no value, in a sample of 880
+# headers, 40 from each volume: PICNO "?" in 162 and SPICE_C_ID "?" in 64 of the 14,672
+# products; TCA "CLOSEST TIME" in 287 of the 600 phase-1 headers, where the others give a
+# time from closest approach such as "-000T02:21:45Z"; and SMEAR 0.1 in all 280 headers of
+# the Jupiter tour, where every earlier header gives the -999 fill and every PDS3 label
+# gives UNK for SMEAR_MAGNITUDE.
+_VICAR_FILLS = {'PICNO': '?', 'SPICE_C_ID': '?', 'TCA': 'CLOSEST TIME', 'SMEAR': 0.1}
 
 # The value that an index or supplemental index column writes where it has none, for each
 # column whose declared null constant stands for no value. The supplement's CUT_OUT_WINDOW
@@ -38,9 +45,11 @@ _VICAR_STRING_FILLS = {'PICNO': '?', 'SPICE_C_ID': '?'}
 # constant, neither label gives the item at all; in the other 646 (TRUTH_WINDOW and the
 # ICT values) or 647-662 (the compression ratios), the labels give a real value the index
 # replaced, such as an ICT_DESPIKE_THRESHOLD of 255 or a compression ratio of 1.831. Only
-# 1-3 rows per ratio hold 0 where the labels also write 0. The other declared constants
-# are real values that the product labels also give, and are kept: EXPOSURE_DURATION 0
-# (301 rows), ON_CHIP_MOSAIC_FLAG N, and PRODUCT_VERSION_ID 0.
+# 1-3 rows per ratio hold 0 where the labels also write 0. The index's SMEAR_MAGNITUDE is
+# 0.1 in all 3,993 rows of the Jupiter tour and -999 in every earlier row, where every
+# label gives UNK; the 0.1 is the VICAR header's placeholder (_VICAR_FILLS). The other
+# declared constants are real values that the product labels also give, and are kept:
+# EXPOSURE_DURATION 0 (301 rows), ON_CHIP_MOSAIC_FLAG N, and PRODUCT_VERSION_ID 0.
 _INDEX_PLACEHOLDERS = {
     'CUT_OUT_WINDOW'                : [-1, -1, -1, -1],
     'TRUTH_WINDOW'                  : [-1, -1, -1, -1],
@@ -49,6 +58,20 @@ _INDEX_PLACEHOLDERS = {
     'ENCODING_COMPRESSION_RATIO'    : 0.,
     'ENCODING_MAX_COMPRESSION_RATIO': 0.,
     'ENCODING_MIN_COMPRESSION_RATIO': 0.,
+    'SMEAR_MAGNITUDE'               : 0.1,
+}
+
+# The index columns that hold the three compression ratios, and the ratio each holds. The
+# indexes of GO_0017-GO_0023, the only volumes whose rows give ratios, write each image's
+# maximum ratio under ENCODING_COMPRESSION_RATIO, its ratio under the minimum's name, and
+# its minimum under the maximum's name: in all 2,935 rows with a nonzero ratio, the three
+# values are the product label's ratio, minimum, and maximum in that rotated order, as in
+# GO_0021/C21/IO/C0506406074R (index 5.428, 3.758, 3.03; label 3.758, 3.03, 5.428). The
+# archive cannot be corrected (rms-data-projects #258), so the host renames them.
+_INDEX_RATIO_COLUMNS = {
+    'ENCODING_COMPRESSION_RATIO'    : 'ENCODING_MAX_COMPRESSION_RATIO',
+    'ENCODING_MIN_COMPRESSION_RATIO': 'ENCODING_COMPRESSION_RATIO',
+    'ENCODING_MAX_COMPRESSION_RATIO': 'ENCODING_MIN_COMPRESSION_RATIO',
 }
 
 # The PDS3 keywords and the VICAR keywords that give the same whole value. Some values
@@ -210,14 +233,15 @@ def is_null(value):
         value (Any): A value from the PDS3 label, the VICAR header, or an index.
 
     Returns:
-        bool: True for None, for a PDS3 null constant (UNK, N/A, or NULL) in any case and
-        with any padding, and for a non-empty list of nothing but these.
+        bool: True for None, for a PDS3 null constant (UNK, N/A, or NULL) or another
+        placeholder text (UNKNOWN, NOT APPLICABLE, "---", or an empty string) in any case
+        and with any padding, and for a non-empty list of nothing but these.
     """
 
     if isinstance(value, list):
         return len(value) > 0 and all(is_null(item) for item in value)
     return value is None or (isinstance(value, str)
-                             and value.strip().upper() in _PDS3_NULLS)
+                             and value.strip().upper() in _NULL_TEXTS)
 
 
 def label_json(label_dict):
@@ -326,7 +350,8 @@ def header_items(header_dict):
         flags FIBE and MOFIBE, which give EXPOSURE_TYPE but more besides, keep their own
         names, as does a code with no PDS3 value. ORBIT_NUMBER comes from the
         observation ID. A value the header leaves unset (a numeric -999, a PICNO or
-        SPICE_C_ID of "?", a set of time fields that is not a valid time, or an
+        SPICE_C_ID of "?", a TCA of "CLOSEST TIME", a SMEAR of 0.1, a placeholder text
+        such as NOT APPLICABLE, a set of time fields that is not a valid time, or an
         observation ID that names no orbit of the Jupiter tour) gives no item.
     """
 
@@ -334,7 +359,7 @@ def header_items(header_dict):
     for (key, value) in header_dict.items():
         if isinstance(value, str):
             value = value.strip()
-        if (value != _VICAR_FILL and value != _VICAR_STRING_FILLS.get(key)
+        if (value != _VICAR_FILL and value != _VICAR_FILLS.get(key)
                 and not is_null(value)):
             items[key] = value
 
@@ -423,18 +448,24 @@ def row_items(row_dict):
         dict: Every column value of the row as a Python str (stripped of padding), int,
         float, bool, or list, except a PDS3 null, a numeric -999 (the indexes' null
         constant for a missing number), a column's placeholder for an image that has no
-        such value (such as the CUT_OUT_WINDOW of -1, -1, -1, -1 and the compression ratio
-        of 0), and an ORBIT_NUMBER that is not an orbit of the Jupiter tour (0-35), which
-        the index writes as -99 for the earlier frames. The "_mask" keys that the table
-        reader adds are left out, and its masks are not applied: the SSI indexes declare
-        real values as null constants, such as an EXPOSURE_DURATION of 0 and an
-        ON_CHIP_MOSAIC_FLAG of N.
+        such value (such as the CUT_OUT_WINDOW of -1, -1, -1, -1, the compression ratio
+        of 0, and the SMEAR_MAGNITUDE of 0.1), and an ORBIT_NUMBER that is not an orbit
+        of the Jupiter tour (0-35), which the index writes as -99 for the earlier frames.
+        The three compression ratios, which the index writes in rotated columns, are
+        given under the names of the ratios they hold: the value of the index's
+        ENCODING_COMPRESSION_RATIO as ENCODING_MAX_COMPRESSION_RATIO, of its
+        ENCODING_MIN_COMPRESSION_RATIO as ENCODING_COMPRESSION_RATIO, and of its
+        ENCODING_MAX_COMPRESSION_RATIO as ENCODING_MIN_COMPRESSION_RATIO. The "_mask"
+        keys that the table reader adds are left out, and its masks are not applied: the
+        SSI indexes declare real values as null constants, such as an EXPOSURE_DURATION
+        of 0 and an ON_CHIP_MOSAIC_FLAG of N.
     """
 
     items = {}
     for (key, value) in row_dict.items():
         if key.endswith('_mask'):
             continue
+        key = _INDEX_RATIO_COLUMNS.get(key, key)
         value = value.tolist() if isinstance(value, (np.ndarray, np.generic)) else value
         if isinstance(value, str):
             value = value.strip()

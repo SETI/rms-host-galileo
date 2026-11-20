@@ -16,8 +16,9 @@ from host_galileo.oops import _ssi_labels
 
 @pytest.mark.parametrize(('value', 'expected'), [
     ('UNK', True), ('N/A', True), ('NULL', True), ('unk', True), (' UNK ', True),
+    ('UNKNOWN', True), ('Not Applicable', True), ('---', True), ('', True), ('  ', True),
     (None, True), (['UNK', 'N/A'], True),
-    ('UNKNOWN', False), ('', False), (0, False), (-999., False), (['A', 'UNK'], False),
+    ('NONE', False), (0, False), (-999., False), (['A', 'UNK'], False), ([], False),
 ])
 def test_is_null(value: Any, expected: bool) -> None:
     assert _ssi_labels.is_null(value) is expected
@@ -171,9 +172,20 @@ def test_header_items_without_a_value(header: dict[str, Any], key: str) -> None:
     assert key not in _ssi_labels.header_items(header)
 
 
-@pytest.mark.parametrize('key', ['PICNO', 'SPICE_C_ID'])
-def test_header_items_question_mark_is_no_value(key: str) -> None:
-    assert _ssi_labels.header_items({key: '?'}) == {}
+@pytest.mark.parametrize(('key', 'fill'), [('PICNO', '?'), ('SPICE_C_ID', '?'),
+                                           ('TCA', 'CLOSEST TIME'), ('SMEAR', 0.1)])
+def test_header_items_fill_is_no_value(key: str, fill: Any) -> None:
+    assert _ssi_labels.header_items({key: fill}) == {}
+
+
+# A fill value of one keyword is a real value of another
+def test_header_items_keep_another_keywords_fill() -> None:
+    assert _ssi_labels.header_items({'NOTE': 'CLOSEST TIME'}) == {'NOTE': 'CLOSEST TIME'}
+
+
+def test_header_items_time_from_closest_approach() -> None:
+    items = _ssi_labels.header_items({'TCA': '-000T02:21:45Z'})
+    assert items == {'NTV_TIME_FROM_CLOSEST_APPROACH': '-000T02:21:45Z'}
 
 
 def test_header_items_keep_the_flags() -> None:
@@ -267,9 +279,21 @@ def test_row_items_drop_nulls() -> None:
     ('ENCODING_COMPRESSION_RATIO', np.float64(0.)),
     ('ENCODING_MAX_COMPRESSION_RATIO', np.float64(0.)),
     ('ENCODING_MIN_COMPRESSION_RATIO', np.float64(0.)),
+    ('SMEAR_MAGNITUDE', np.float64(0.1)),
 ])
 def test_row_items_drop_a_placeholder(column: str, value: Any) -> None:
     assert _ssi_labels.row_items({column: value}) == {}
+
+
+# The tour indexes write the ratio, minimum, and maximum of GO_0021/C21/IO/C0506406074R
+# (3.758, 3.03, 5.428 in its label) as 5.428, 3.758, 3.03
+def test_row_items_name_the_rotated_compression_ratios() -> None:
+    row = {'ENCODING_COMPRESSION_RATIO': np.float64(5.428),
+           'ENCODING_MIN_COMPRESSION_RATIO': np.float64(3.758),
+           'ENCODING_MAX_COMPRESSION_RATIO': np.float64(3.03)}
+    assert _ssi_labels.row_items(row) == {'ENCODING_COMPRESSION_RATIO': 3.758,
+                                          'ENCODING_MIN_COMPRESSION_RATIO': 3.03,
+                                          'ENCODING_MAX_COMPRESSION_RATIO': 5.428}
 
 
 @pytest.mark.parametrize(('orbit', 'kept'), [(0, True), (35, True), (-99, False)])
