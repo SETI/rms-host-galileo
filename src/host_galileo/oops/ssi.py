@@ -276,13 +276,14 @@ class GalileoSSI(oops.Host):
         Raises:
             oops.OopsSpiceError: If no `frame` is given and the C kernels lack the
                 pointing of the scan platform at the time at which the frame is evaluated
-                (the midtime of the exposure, or of the `cadence` override, plus the
-                seconds of a `timeshift` once if its letters include "T" and once more if
-                they include "F"), or if the time
-                must come from the spacecraft clock count and the clock kernel cannot
-                convert it. The message of the first is
+                (the midtime of the exposure, or of the `cadence` override, or the start
+                or end that a `tracker` selects, plus the seconds of a `timeshift` once if
+                its letters include "T" and once more if they include "F"), or if the
+                time must come from the spacecraft clock count and the clock kernel
+                cannot convert it. The message of the first is
                 "no Galileo SSI pointing at <time> for <image file>: <SPICE error code>",
-                and the cause of either is the SPICE exception.
+                where <time> is that time without the seconds of an "F" timeshift, and
+                the cause of either is the SPICE exception.
             oops.OopsTypeError: If a keyword argument is not one of those listed.
             oops.OopsValueError: If `select` is not None, or if `pds3_options` names a
                 parser method other than fast, strict, and loose that the parser rejects,
@@ -800,9 +801,9 @@ class GalileoSSI(oops.Host):
                 the time must come from the spacecraft clock count and FRAME_DURATION is
                 not one of the SSI frame durations.
             oops.OopsSpiceError: If `check_pointing` is True, no frame override is given,
-                and the C kernels lack the pointing of the scan platform at the midtime
-                of the exposure; or if the time must come from the spacecraft clock count
-                and the clock kernel cannot convert it.
+                and the C kernels lack the pointing of the scan platform at the time
+                described for :meth:`from_file`; or if the time must come from the
+                spacecraft clock count and the clock kernel cannot convert it.
         """
 
         # PDS3 labels and index rows use the same names
@@ -885,7 +886,7 @@ class GalileoSSI(oops.Host):
         # whose frame raises the error when it is used.
         if using_cks:
             params['frame'] = oops.Host._check_spice_frame(
-                params['frame'], oops.Host._pointing_time(params['cadence'], overrides),
+                params['frame'], params['cadence'], overrides,
                 description=_NO_POINTING, filepath=filepath, defer=not check_pointing)
 
         # Apply standard overrides, including the path subfields

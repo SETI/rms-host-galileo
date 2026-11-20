@@ -170,10 +170,13 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   count and `FRAME_DURATION`), and `TELEMETRY_FORMAT_ID` are required and raise
   `HostFormatError` naming the item and the file; an index row without a telemetry format
   (one read without its supplement) gets the full frame instead (`_INDEX_DEFAULT_MODE`).
-- Missing pointing goes through `oops.Host._check_spice_frame()` at the time that
-  `oops.Host._pointing_time()` gives (the midtime after any cadence override, moved by a
-  "T" or "F" timeshift), only when no `frame` is given. `from_file()`
-  raises `oops.OopsSpiceError` at load, naming the image file. In `from_index()`, every
+- Missing pointing goes through `oops.Host._check_spice_frame()`, called before
+  `_apply_overrides()` with the cadence and the overrides, only when no `frame` is given.
+  It builds the frame and the time as the overrides will: `GLL_SCAN_PLATFORM` is
+  relative to J2000, so the C kernels are read at the midtime after any cadence override
+  (or the tracker's start or end), moved by a "T" timeshift and again by an "F" one.
+  `from_file()` raises `oops.OopsSpiceError` at load, naming the image file. In
+  `from_index()`, every
   row gives a Snapshot; a row whose pointing the C kernels lack gets an
   `oops.frame.SpiceErrorFrame`, which raises the same error whenever it is evaluated. A
   clock count that the clock kernel cannot convert raises `OopsSpiceError` from
@@ -215,7 +218,10 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   `MISSION_NAME`, `INSTRUMENT_ID`, and `OBSTRUCTION_ID` columns of an SSI volume's own
   index (`IMGINDEX.LBL`, `CUMINDEX.LBL`), so `oops.Host.from_index()` passes that index
   to the class, which refuses it before any row is read, and None otherwise, so that the
-  host is identified from the first row. A table value that `PdsTable` cannot read as
+  host is identified from the first row. For such a label in a directory named `INDEX`,
+  `oops.Host.from_index()` drops the hosts that set `METADATA_INDEX_EXAMPLE` before
+  reading a row and, with no other host left, raises its own host-neutral
+  `HostIndexError`. A table value that `PdsTable` cannot read as
   its column's number is yielded as a string with a UserWarning, not an error of the
   table; the docs say what oops does with malformed rows rather than promising a check.
 - `GalileoSSI.from_index()` returns an iterator. It checks its arguments and reads the

@@ -12,11 +12,12 @@ Reading an image file
 
 :exc:`oops.OopsSpiceError`
     The C kernels lack the pointing of the scan platform at the time at which the frame
-    will be evaluated, after any ``cadence`` and ``timeshift`` overrides (see
-    :doc:`user_guide_geometry`). The message
-    reads "no Galileo SSI pointing at <time> for <image file>: <code>", ending with the
-    SPICE error code, such as ``SPICE(CKINSUFFDATA)``. It is never raised when the
-    caller supplies the pointing with the ``frame`` override. The same class is raised
+    will be evaluated, after any ``cadence``, ``timeshift``, and ``tracker`` overrides
+    (see :doc:`user_guide_geometry`). The message reads "no Galileo SSI pointing at
+    <time> for <image file>: <code>", ending with the SPICE error code, such as
+    ``SPICE(CKINSUFFDATA)``; <time> is that time without the seconds of an ``F``
+    ``timeshift``. It is never raised when the caller supplies the pointing with the
+    ``frame`` override. The same class is raised
     when the time must come from the clock count and the clock kernel cannot convert it;
     that message begins "no time for Galileo clock count".
 

@@ -15,8 +15,9 @@ row's Snapshot is built when the iteration reaches that row. The memory used sta
 the same however long the index is. An error in a row is raised when the iteration
 reaches it, after the rows before it, and the iteration ends there: the rows after it
 are not given. The one exception is a row longer than its label says, whose error comes
-a few rows early, as described below. The ``filter`` argument, described below, can leave such a row out. To build
-every row at once, pass the iterator to ``list()``:
+a few rows early, as described below. The ``filter`` argument, described below, can
+leave out a row whose Snapshot cannot be built. To build every row at once, pass the
+iterator to ``list()``:
 
 .. code-block:: python
 
@@ -188,3 +189,7 @@ of an SSI volume's own index does not name its instrument, but its table has the
 index, so :meth:`oops.host.Host.from_index` recognizes it from its label too and passes
 it to the host, which raises :exc:`~oops.host.HostIndexError` as described above before
 any row is read. An index whose label gives neither is recognized from its first row.
+When such an index is in a directory named ``INDEX``, :meth:`oops.host.Host.from_index`
+does not offer it to SSI, which reads only the metadata indexes; unless another
+registered host reads a volume's own index, it raises :exc:`~oops.host.HostIndexError`
+before any row is read.

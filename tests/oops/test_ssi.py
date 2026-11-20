@@ -1183,6 +1183,28 @@ def test_from_file_checks_pointing_in_the_cadence_override(
     assert times == [101.]
 
 
+# A tracker evaluates the frame once, at the start or end of the exposure that it selects,
+# so the pointing is checked there first
+@pytest.mark.usefixtures('initialized_ssi', 'ganymede_path')
+@pytest.mark.parametrize(('tracker', 'time'), [('start', 100.), ('end', 102.)])
+def test_from_file_checks_pointing_at_the_tracker_time(
+        tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, tracker: str,
+        time: float) -> None:
+    def record(time: Any, quick: Any = None) -> Any:
+        times.append(float(oops.Scalar.as_scalar(time).vals))
+        return transform(time, quick=quick)
+
+    GalileoSSI._define_camera_frame()
+    frame = oops.Frame.as_frame('GLL_SCAN_PLATFORM')
+    transform = frame.transform_at_time
+    times: list[float] = []
+    monkeypatch.setattr(frame, 'transform_at_time', record)
+    cadence = oops.cadence.SnapCadence(100., 2.)
+    GalileoSSI.from_file(write_vicar_image(tmp_path), astrometry=True, cadence=cadence,
+                         tracker=tracker)
+    assert times[0] == time
+
+
 # A timeshift of the cadence ("T") moves the time at which the frame is evaluated, and so
 # does one of the frame ("F"), by the same seconds again if both are given; one of the
 # path ("P") leaves it. The letters are read in either case.
@@ -1192,10 +1214,14 @@ def test_from_file_checks_pointing_in_the_cadence_override(
 def test_from_file_checks_pointing_at_the_shifted_time(
         tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, letters: str,
         time: float) -> None:
+    # A FrameShift ("F") passes its time as a Scalar, with `quick`
+    def record(time: Any, quick: Any = None) -> None:
+        times.append(float(oops.Scalar.as_scalar(time).vals))
+
     GalileoSSI._define_camera_frame()
     times: list[float] = []
     monkeypatch.setattr(oops.Frame.as_frame('GLL_SCAN_PLATFORM'), 'transform_at_time',
-                        times.append)
+                        record)
     cadence = oops.cadence.SnapCadence(100., 2.)
     GalileoSSI.from_file(write_vicar_image(tmp_path), astrometry=True, cadence=cadence,
                          timeshift=(5., letters))
@@ -1207,15 +1233,19 @@ def test_from_file_checks_pointing_at_the_shifted_time(
 @pytest.mark.usefixtures('initialized_ssi')
 def test_from_file_frame_timeshift_needs_pointing_at_the_shifted_time(
         tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    def pointing_until(time: float) -> None:
-        if time > 103.:
+    # A FrameShift passes its time as a Scalar, with `quick`
+    def pointing_until(time: Any, quick: Any = None) -> None:
+        if oops.Scalar.as_scalar(time).vals > 103.:
             no_pointing()
 
     GalileoSSI._define_camera_frame()
     monkeypatch.setattr(oops.Frame.as_frame('GLL_SCAN_PLATFORM'), 'transform_at_time',
                         pointing_until)
     cadence = oops.cadence.SnapCadence(100., 2.)
-    with pytest.raises(oops.OopsSpiceError, match=r'SPICE\(CKINSUFFDATA\)$'):
+    # The message gives the observation's midtime, 101 s, without the frame's seconds
+    with pytest.raises(oops.OopsSpiceError,
+                       match=r'pointing at 2000-01-01T12:00:36\.816 for .*: '
+                             r'SPICE\(CKINSUFFDATA\)$'):
         GalileoSSI.from_file(write_vicar_image(tmp_path), astrometry=True,
                              cadence=cadence, timeshift=(5., 'F'))
 
@@ -1773,10 +1803,14 @@ def test_from_index_refuses_a_volumes_own_index(tmp_path: pathlib.Path, director
         GalileoSSI.from_index(index, row_dicts=rows)
 
 
-# A label without the host's name or the SSI columns leaves the host to the first row
+# A label without the host's name or the SSI columns is claimed by no host, so oops
+# refuses the index in its INDEX directory before any row is read, naming no host
 def test_host_from_index_refuses_a_volumes_own_index(tmp_path: pathlib.Path) -> None:
     index = write_volume_index(tmp_path / 'GO_0017', obstruction=False)
-    with pytest.raises(oops.host.HostIndexError, match=_VOLUME_INDEX_ERROR):
+    with pytest.raises(oops.host.HostIndexError,
+                       match=r'^the registered hosts that might read this index read '
+                             r'only the Ring-Moon Systems Node metadata indexes, not a '
+                             r'volume\'s own index: .*GO_0017/INDEX/IMGINDEX\.lbl$'):
         oops.Host.from_index(index)
 
 

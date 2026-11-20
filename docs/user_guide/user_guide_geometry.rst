@@ -42,9 +42,10 @@ host accepts a sample within 40 ticks of the time it needs.
 When :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file` builds the frame from the C
 kernels, it checks at once that they hold the pointing at the time at which the frame
 will be evaluated. That is the middle of the exposure, or of the ``cadence`` override,
-plus the seconds of a ``timeshift`` once if its letters include ``T`` (the times move)
-and once more if they include ``F`` (the frame is evaluated later). If they do not, it
-raises :exc:`oops.OopsSpiceError` (see :doc:`user_guide_errors`). An index row's
+or the start or end that a ``tracker`` selects, plus the seconds of a ``timeshift`` once
+if its letters include ``T`` (the times move) and once more if they include ``F`` (the
+frame is evaluated later). If they do not, it raises :exc:`oops.OopsSpiceError` (see
+:doc:`user_guide_errors`). An index row's
 Snapshot is built without that check, and its frame raises the same error only when it
 is evaluated (see :doc:`user_guide_index`).
 
