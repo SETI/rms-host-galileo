@@ -205,8 +205,9 @@ def fake_spice(monkeypatch: pytest.MonkeyPatch) -> FakeSpice:
     uses :func:`fake_scs2e`, the instrument kernel pool holds the SSI values, a SpicePath
     becomes a FixedPath at the origin, and a SpiceType1Frame becomes an identity Cmatrix
     on J2000. The SPICE file cache returns paths without reading them, and
-    `cspyce.furnsh` only records the path. The Path and Frame registries are copied so
-    that frames registered by one test never reach another.
+    `cspyce.furnsh` only records the path. The Path and Frame registries, caches, and
+    waypoint and wayframe pools are copied so that paths and frames made by one test never
+    reach another.
     """
 
     fake = FakeSpice()
@@ -249,6 +250,18 @@ def fake_spice(monkeypatch: pytest.MonkeyPatch) -> FakeSpice:
     monkeypatch.setattr(oops.Path, '_PATH_CACHE', dict(oops.Path._PATH_CACHE))
     monkeypatch.setattr(oops.Frame, '_FRAME_REGISTRY', dict(oops.Frame._FRAME_REGISTRY))
     monkeypatch.setattr(oops.Frame, '_FRAME_CACHE', dict(oops.Frame._FRAME_CACHE))
+
+    # A path or frame defined as an earlier one was shares its waypoint or wayframe, and
+    # so its ID, so each class's pool is copied too; otherwise a fixed path that one test
+    # makes at the origin could come back as another test's path of another name. This
+    # is New Horizons' fixture, kept until oops offers one helper (SETI/rms-oops#250).
+    for path_class in oops.Path._PATH_SUBCLASSES:
+        if '_WAYPOINTS' in vars(path_class):
+            monkeypatch.setattr(path_class, '_WAYPOINTS', dict(path_class._WAYPOINTS))
+    for frame_class in oops.Frame._FRAME_SUBCLASSES:
+        for pool in ('_WAYFRAMES', '_FOR_NAME', '_FRAME_LOOKUP'):
+            if pool in vars(frame_class):
+                monkeypatch.setattr(frame_class, pool, dict(getattr(frame_class, pool)))
     return fake
 
 

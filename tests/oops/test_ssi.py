@@ -4,6 +4,7 @@
 """Tests for the Galileo SSI host, host_galileo.oops.ssi."""
 
 from collections.abc import Iterator
+import itertools
 import json
 import os
 import pathlib
@@ -12,10 +13,12 @@ import subprocess
 import sys
 from typing import Any, cast
 
+import cspyce
 import julian
 import numpy as np
 import oops
 from filecache import FCPath
+from oops.host._index_rows import CHUNK_ROWS
 from pdsparser import Pds3Label
 import pytest
 import vicar
@@ -444,7 +447,8 @@ def test_snapshot_without_cutout_window() -> None:
 
 
 def test_snapshot_supplement_placeholder_window() -> None:
-    obs = snapshot(CUT_OUT_WINDOW=np.array([-1, -1, -1, -1]))
+    obs = snapshot(CUT_OUT_WINDOW=np.array([-1, -1, -1, -1]),
+                   CUT_OUT_WINDOW_mask=np.array([True, True, True, True]))
     assert obs.fov is GalileoSSI._FOVS['HIS']
 
 
@@ -832,8 +836,8 @@ def test_from_file_rejects_an_unknown_keyword(tmp_path: pathlib.Path) -> None:
 @pytest.mark.parametrize('select', [0, slice(None), 'data'])
 def test_from_file_refuses_select(tmp_path: pathlib.Path, select: Any) -> None:
     with pytest.raises(oops.OopsValueError,
-                       match='a Galileo SSI image is one observation; select must be '
-                             'None'):
+                       match='each Galileo SSI image is one observation; select must '
+                             'be None'):
         GalileoSSI.from_file(write_vicar_image(tmp_path), select=select)
 
 ##########################################################################################
@@ -1179,6 +1183,23 @@ def test_from_file_checks_pointing_in_the_cadence_override(
     assert times == [101.]
 
 
+# A timeshift of the cadence moves the time at which the pointing is checked; a timeshift
+# of the frame alone leaves it
+@pytest.mark.usefixtures('initialized_ssi')
+@pytest.mark.parametrize(('letters', 'time'), [('T', 106.), ('F', 101.)])
+def test_from_file_checks_pointing_at_the_shifted_time(
+        tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, letters: str,
+        time: float) -> None:
+    GalileoSSI._define_camera_frame()
+    times: list[float] = []
+    monkeypatch.setattr(oops.Frame.as_frame('GLL_SCAN_PLATFORM'), 'transform_at_time',
+                        times.append)
+    cadence = oops.cadence.SnapCadence(100., 2.)
+    GalileoSSI.from_file(write_vicar_image(tmp_path), astrometry=True, cadence=cadence,
+                         timeshift=(5., letters))
+    assert times == [time]
+
+
 @pytest.mark.usefixtures('initialized_ssi')
 def test_from_file_with_a_frame_needs_no_pointing(
         tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1430,11 +1451,12 @@ _INDEX_ROWS = [
      'G1GSGLOBAL02', 'GANYMEDE', '1996-06-26T08:47:05.557Z', 'CLEAR', 0., 15.166),
 ]
 
+# The supplement declares a CUT_OUT_WINDOW of -1, -1, -1, -1 as not applicable
 _SUPPLEMENT_COLUMNS = [
     ('VOLUME_ID', 'CHARACTER', 7),
     ('FILE_SPECIFICATION_NAME', 'CHARACTER', 30),
     ('TELEMETRY_FORMAT_ID', 'CHARACTER', 3),
-    ('CUT_OUT_WINDOW', 'ASCII_INTEGER', 4),
+    ('CUT_OUT_WINDOW', 'ASCII_INTEGER', 4, -1),
     ('EXPOSURE_TYPE', 'CHARACTER', 8),
     ('SPACECRAFT_CLOCK_START_COUNT', 'CHARACTER', 15),
 ]
@@ -1450,12 +1472,14 @@ _SUPPLEMENT_ROWS = [
 
 
 def write_table(directory: pathlib.Path, name: str, object_name: str,
-                columns: list[tuple[str, str, int]], rows: list[tuple[Any, ...]],
+                columns: list[tuple[Any, ...]], rows: list[tuple[Any, ...]],
                 **keywords: Any) -> pathlib.Path:
     """Write an ASCII PDS3 table and its label; return the label's path.
 
-    An ASCII_INTEGER column holds a list of four values, each in a field of `width`
-    bytes; an ASCII_REAL column holds one value.
+    Each column is (name, data type, width), or (name, data type, width, constant) for a
+    column that declares a NOT_APPLICABLE_CONSTANT. An ASCII_INTEGER column holds a list
+    of four values, each in a field of `width` bytes; an ASCII_REAL column holds one
+    value.
     """
 
     def fields(value: Any, kind: str, width: int) -> list[str]:
@@ -1465,7 +1489,8 @@ def write_table(directory: pathlib.Path, name: str, object_name: str,
             return [f'{item:{width}d}' for item in value]
         return [f'{value:{width}.3f}']
 
-    lines = [','.join(item for (value, (_, kind, width)) in zip(row, columns, strict=True)
+    lines = [','.join(item for (value, (_, kind, width, *_)) in zip(row, columns,
+                                                                    strict=True)
                       for item in fields(value, kind, width)) + '\r\n' for row in rows]
     (directory / f'{name}.tab').write_text(''.join(lines), newline='')
     row_bytes = len(lines[0])
@@ -1478,8 +1503,9 @@ def write_table(directory: pathlib.Path, name: str, object_name: str,
              f'  ROWS = {len(rows)}', f'  COLUMNS = {len(columns)}',
              f'  ROW_BYTES = {row_bytes}']
     start = 1
-    for (column, kind, width) in columns:
+    for (column, kind, width, *constant) in columns:
         text += ['  OBJECT = COLUMN', f'    NAME = {column}', f'    DATA_TYPE = {kind}']
+        text += [f'    NOT_APPLICABLE_CONSTANT = {value}' for value in constant]
         if kind == 'CHARACTER':
             text += [f'    START_BYTE = {start + 1}', f'    BYTES = {width}']
             start += width + 3
@@ -1500,11 +1526,13 @@ _INDEX_KEYWORDS = {'MISSION_NAME': 'GALILEO', 'INSTRUMENT_HOST_NAME': 'GALILEO',
                    'INSTRUMENT_ID': 'SSI'}
 
 
-def write_index(directory: pathlib.Path) -> pathlib.Path:
-    """Write a three-row SSI index and its label; return the label's path."""
+def write_index(directory: pathlib.Path,
+                rows: list[tuple[Any, ...]] = _INDEX_ROWS) -> pathlib.Path:
+    """Write an SSI index, by default of three rows, and its label; return the label's
+    path."""
 
     return write_table(directory, 'GO_0017_index', 'IMAGE_INDEX_TABLE', _INDEX_COLUMNS,
-                       _INDEX_ROWS, **_INDEX_KEYWORDS)
+                       rows, **_INDEX_KEYWORDS)
 
 
 def write_supplement(directory: pathlib.Path,
@@ -1521,6 +1549,57 @@ def write_volume(directory: pathlib.Path) -> pathlib.Path:
 
     write_supplement(directory)
     return write_index(directory)
+
+
+def index_rows(index: pathlib.Path) -> list[dict[str, Any]]:
+    """The rows of an SSI index alone, as dictionaries, for `row_dicts`."""
+
+    return list(oops.Host._index_rows(index, supplement=None))
+
+
+def test_index_and_supplement_are_paired_by_position() -> None:
+    assert GalileoSSI.MERGE_SUPPLEMENT_BY_FILE is False
+
+
+def long_volume(directory: pathlib.Path, count: int) -> pathlib.Path:
+    """Write an index and supplement of `count` rows, each a copy of the second row of
+    :data:`_INDEX_ROWS` for another image; return the index label's path."""
+
+    def renamed(row: tuple[Any, ...], number: int) -> tuple[Any, ...]:
+        return (row[0], f'G1/GANYMEDE/C03496{number:04d}R.LBL', *row[2:])
+
+    write_supplement(directory, [renamed(_SUPPLEMENT_ROWS[1], k) for k in range(count)])
+    return write_index(directory, [renamed(_INDEX_ROWS[1], k) for k in range(count)])
+
+
+def test_from_index_reads_no_table_at_call_time(tmp_path: pathlib.Path) -> None:
+    """The call reads only the labels: with both table files gone it still returns, and
+    the first step of the iteration finds them missing."""
+
+    index = write_volume(tmp_path)
+    for table in tmp_path.glob('*.tab'):
+        table.unlink()
+    snapshots = GalileoSSI.from_index(index)
+    with pytest.raises(FileNotFoundError):
+        next(snapshots)
+
+
+def test_from_index_yields_rows_before_a_later_missing_row(
+        tmp_path: pathlib.Path) -> None:
+    """The rows are read as the iteration proceeds: a row that the label promises but
+    the table file lacks, beyond the first chunks of rows read, is found only after the
+    rows before it are yielded."""
+
+    count = 2 * CHUNK_ROWS + 1
+    index = long_volume(tmp_path, count)
+    table = tmp_path / 'GO_0017_index.tab'
+    table.write_bytes(table.read_bytes().rpartition(b'"GO_0017"')[0])
+    snapshots = GalileoSSI.from_index(index)
+    assert next(snapshots).basename == 'C034960000R.IMG'
+    assert len(list(itertools.islice(snapshots, count - 2))) == count - 2
+    with pytest.raises(oops.host.HostIndexError,
+                       match=r'invalid index table .*GO_0017_index\.lbl'):
+        next(snapshots)
 
 
 def test_from_index_builds_each_row_when_reached(tmp_path: pathlib.Path,
@@ -1549,13 +1628,33 @@ def test_from_index_raises_a_row_error_when_reached(tmp_path: pathlib.Path) -> N
     """A row that cannot give a Snapshot raises when the iteration reaches it, after the
     rows before it have been yielded."""
 
-    rows = GalileoSSI._read_index_rows(write_index(tmp_path))
+    index = write_index(tmp_path)
+    rows = index_rows(index)
     del rows[1]['EXPOSURE_DURATION']
-    snapshots = GalileoSSI.from_index(tmp_path / 'missing.lbl', row_dicts=rows)
+    snapshots = GalileoSSI.from_index(index, row_dicts=rows)
     assert next(snapshots).basename == 'C0346405900R.IMG'
     with pytest.raises(oops.host.HostFormatError,
                        match=r'exposure unknown: no EXPOSURE_DURATION for '
                              r'.*C0349632100R\.IMG'):
+        next(snapshots)
+
+
+def test_from_index_clock_error_names_the_image(tmp_path: pathlib.Path,
+                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    """A row timed from a clock count that the clock kernel cannot convert raises an
+    error naming that row's image file."""
+
+    def scs2e(spacecraft: int, count: str) -> float:
+        raise RuntimeError('SPICE(VALUEOUTOFRANGE) -- the count is outside the clock')
+
+    monkeypatch.setattr(cspyce, 'scs2e', scs2e)
+    index = write_index(tmp_path)
+    rows = index_rows(index)[1:2]
+    rows[0]['IMAGE_TIME'] = 'UNK'
+    snapshots = GalileoSSI.from_index(index, row_dicts=rows)
+    with pytest.raises(oops.OopsSpiceError,
+                       match=r"^no time for Galileo clock count '03496321\.00' for "
+                             r".*C0349632100R\.IMG: SPICE\(VALUEOUTOFRANGE\)$"):
         next(snapshots)
 
 
@@ -1590,10 +1689,11 @@ def test_from_index_names_the_image_in_full(tmp_path: pathlib.Path) -> None:
 
 # An index read fetches no image, so a remote image has abspath only if it is cached
 def test_from_index_remote_image_abspath_only_when_cached(tmp_path: pathlib.Path) -> None:
-    rows = GalileoSSI._read_index_rows(write_index(tmp_path))
+    local = write_index(tmp_path)
     put_in_cache(f'{_REMOTE}/C0349632100R.IMG', b'')
     index = 'https://pds.example.org/metadata/GO_0xxx/GO_0017/GO_0017_index.lbl'
-    snapshots = GalileoSSI.from_index(index, row_dicts=rows)
+    snapshots = GalileoSSI.from_index(index, row_dicts=index_rows(local),
+                                      label=Pds3Label(local))
     assert [hasattr(obs, 'abspath') for obs in snapshots] == [False, True, False]
 
 
@@ -1601,45 +1701,49 @@ def test_from_index_remote_image_abspath_only_when_cached(tmp_path: pathlib.Path
 @pytest.mark.parametrize('remote', [False, True], ids=['local', 'remote'])
 def test_from_index_creates_no_directories(tmp_path: pathlib.Path, remote: bool) -> None:
     (tmp_path / 'metadata').mkdir()
-    index: pathlib.Path | FCPath = write_volume(tmp_path / 'metadata')
-    rows = GalileoSSI._read_index_rows(index)
+    local = write_volume(tmp_path / 'metadata')
+    index: pathlib.Path | FCPath = local
+    rows = index_rows(local)
     if remote:
         index = FCPath('https://pds.example.org/metadata/GO_0017_index.lbl')
     before = sorted(tmp_path.rglob('*'))
-    snapshots = list(GalileoSSI.from_index(index, row_dicts=rows))
+    snapshots = list(GalileoSSI.from_index(index, row_dicts=rows,
+                                           label=Pds3Label(local)))
     assert [hasattr(obs, 'abspath') for obs in snapshots] == [False, False, False]
     assert sorted(tmp_path.rglob('*')) == before
 
 
-@pytest.mark.parametrize(('index', 'volumes'), [
-    ('/h/metadata/GO_0xxx/GO_0017/GO_0017_index.lbl', '/h/volumes/GO_0xxx'),
-    ('https://h.org/metadata/GO_0xxx/GO_0017/GO_0017_index.lbl',
-     'https://h.org/volumes/GO_0xxx'),
-    ('/h/GO_0017_index.lbl', '/h'),
-], ids=['metadata', 'metadata-url', 'other'])
-def test_volumes_directory(index: str, volumes: str) -> None:
-    assert str(GalileoSSI._volumes_directory(index)) == volumes
+# The image paths of index rows come from the location of the index
+def test_from_index_finds_the_volumes_beside_the_metadata(tmp_path: pathlib.Path) -> None:
+    metadata = tmp_path / 'metadata' / 'GO_0xxx' / 'GO_0017'
+    metadata.mkdir(parents=True)
+    obs = next(GalileoSSI.from_index(write_volume(metadata)))
+    assert obs.filepath == FCPath(tmp_path / 'volumes/GO_0xxx/GO_0017/J0/OPNAV/'
+                                  'C0346405900R.IMG')
 
 
-def write_volume_index(volume: pathlib.Path) -> pathlib.Path:
-    """Write the SSI index as a volume's own index, in its INDEX directory, whose label
-    does not name the instrument host; return the label's path."""
+def write_volume_index(volume: pathlib.Path, directory: str = 'INDEX') -> pathlib.Path:
+    """Write the SSI index as a volume's own index, in its INDEX directory (or one named
+    `directory`), whose label does not name the instrument host; return the label's
+    path."""
 
-    (volume / 'INDEX').mkdir(parents=True)
-    return write_table(volume / 'INDEX', 'IMGINDEX', 'IMAGE_INDEX_TABLE',
+    (volume / directory).mkdir(parents=True)
+    return write_table(volume / directory, 'IMGINDEX', 'IMAGE_INDEX_TABLE',
                        _INDEX_COLUMNS, _INDEX_ROWS)
 
 
 _VOLUME_INDEX_ERROR = (r'Galileo SSI reads the Ring-Moon Systems Node metadata index, '
                        r'such as "GO_0017_index\.lbl", not a volume\'s own index: '
-                       r'.*GO_0017/INDEX/IMGINDEX\.lbl')
+                       r'.*GO_0017/(?i:index)/IMGINDEX\.lbl')
 
 
-@pytest.mark.parametrize('given_rows', [False, True], ids=['read', 'row-dicts'])
-def test_from_index_refuses_a_volumes_own_index(tmp_path: pathlib.Path,
+@pytest.mark.parametrize(('directory', 'given_rows'), [('INDEX', False), ('INDEX', True),
+                                                       ('index', False)],
+                         ids=['read', 'row-dicts', 'lower-case'])
+def test_from_index_refuses_a_volumes_own_index(tmp_path: pathlib.Path, directory: str,
                                                 given_rows: bool) -> None:
-    index = write_volume_index(tmp_path / 'GO_0017')
-    rows = GalileoSSI._read_index_rows(index) if given_rows else None
+    index = write_volume_index(tmp_path / 'GO_0017', directory)
+    rows = index_rows(index) if given_rows else None
     with pytest.raises(oops.host.HostIndexError, match=_VOLUME_INDEX_ERROR):
         GalileoSSI.from_index(index, row_dicts=rows)
 
@@ -1688,21 +1792,36 @@ def test_from_index_rejects_another_host(tmp_path: pathlib.Path) -> None:
         GalileoSSI.from_index(path)
 
 
-def test_from_index_pairs_a_supplement_in_another_order(tmp_path: pathlib.Path) -> None:
-    (tmp_path / 'reordered').mkdir()
-    rows = [_SUPPLEMENT_ROWS[1], _SUPPLEMENT_ROWS[0], _SUPPLEMENT_ROWS[2]]
-    reordered = GalileoSSI.from_index(
-        write_index(tmp_path / 'reordered'),
-        supplement=write_supplement(tmp_path / 'reordered', rows))
-    in_order = GalileoSSI.from_index(write_volume(tmp_path))
-    assert [obs.dict for obs in reordered] == [obs.dict for obs in in_order]
+# The rows are paired by position, so a supplement in another order raises at the first
+# row whose files differ, after the rows before it are yielded
+def test_from_index_rejects_a_supplement_in_another_order(tmp_path: pathlib.Path) -> None:
+    rows = [_SUPPLEMENT_ROWS[0], _SUPPLEMENT_ROWS[2], _SUPPLEMENT_ROWS[1]]
+    snapshots = GalileoSSI.from_index(write_index(tmp_path),
+                                      supplement=write_supplement(tmp_path, rows))
+    assert next(snapshots).basename == 'C0346405900R.IMG'
+    with pytest.raises(oops.host.HostIndexError,
+                       match=r"index row 1 gives '.*C0349632100R\.LBL' but the "
+                             r"supplement row in the same position gives "
+                             r"'.*C0349632200R\.LBL'"):
+        next(snapshots)
 
 
 def test_from_index_rejects_a_short_supplement(tmp_path: pathlib.Path) -> None:
+    supplement = write_supplement(tmp_path, _SUPPLEMENT_ROWS[:2])
+    snapshots = GalileoSSI.from_index(write_index(tmp_path), supplement=supplement)
+    assert len(list(itertools.islice(snapshots, 2))) == 2
     with pytest.raises(oops.host.HostIndexError,
-                       match=r'no supplement row for an index row \(1\)'):
-        GalileoSSI.from_index(write_index(tmp_path),
-                              supplement=write_supplement(tmp_path, _SUPPLEMENT_ROWS[:2]))
+                       match=r'the supplement ends before index row 2'):
+        next(snapshots)
+
+
+def test_from_index_rejects_a_long_supplement(tmp_path: pathlib.Path) -> None:
+    snapshots = GalileoSSI.from_index(
+        write_index(tmp_path, _INDEX_ROWS[:2]), supplement=write_supplement(tmp_path))
+    assert len(list(itertools.islice(snapshots, 2))) == 2
+    with pytest.raises(oops.host.HostIndexError,
+                       match='the supplement has more rows than the index'):
+        next(snapshots)
 
 
 def test_from_index_filter(tmp_path: pathlib.Path) -> None:
@@ -1711,17 +1830,72 @@ def test_from_index_filter(tmp_path: pathlib.Path) -> None:
     assert [obs.filter for obs in snapshots] == ['VIOLET']
 
 
-def test_from_index_uses_given_rows(tmp_path: pathlib.Path) -> None:
-    rows = GalileoSSI._read_index_rows(write_index(tmp_path))
-    snapshots = GalileoSSI.from_index(tmp_path / 'missing.lbl', row_dicts=rows[:1])
+def test_from_index_filter_uses_the_supplement(tmp_path: pathlib.Path) -> None:
+    snapshots = GalileoSSI.from_index(write_volume(tmp_path),
+                                      filter={'TELEMETRY_FORMAT_ID': 'IM8'})
     assert [obs.basename for obs in snapshots] == ['C0346405900R.IMG']
 
 
+def test_from_index_refuses_an_unknown_filter_column(tmp_path: pathlib.Path) -> None:
+    """The call itself raises, before any row is read."""
+
+    with pytest.raises(oops.OopsValueError, match='NOT_A_COLUMN'):
+        GalileoSSI.from_index(write_volume(tmp_path), filter={'NOT_A_COLUMN': 1})
+
+
+def test_from_index_uses_given_rows(tmp_path: pathlib.Path) -> None:
+    index = write_index(tmp_path)
+    snapshots = GalileoSSI.from_index(index, row_dicts=index_rows(index)[:1])
+    assert [obs.basename for obs in snapshots] == ['C0346405900R.IMG']
+
+
+def test_from_index_iterates_given_rows_lazily(tmp_path: pathlib.Path) -> None:
+    """Rows given as an iterator are taken one at a time, as the iteration needs them."""
+
+    index = write_index(tmp_path)
+    taken: list[str] = []
+
+    def rows() -> Iterator[dict[str, Any]]:
+        for row in index_rows(index):
+            taken.append(row['FILE_SPECIFICATION_NAME'])
+            yield row
+
+    snapshots = GalileoSSI.from_index(index, row_dicts=rows())
+    next(snapshots)
+    assert taken == ['J0/OPNAV/C0346405900R.LBL']
+
+
 def test_from_index_names_the_image_in_the_label_case(tmp_path: pathlib.Path) -> None:
-    rows = GalileoSSI._read_index_rows(write_index(tmp_path))
+    index = write_index(tmp_path)
+    rows = index_rows(index)
     rows[0]['FILE_SPECIFICATION_NAME'] = 'j0/opnav/c0346405900r.lbl'
-    [obs] = GalileoSSI.from_index(tmp_path / 'missing.lbl', row_dicts=rows[:1])
+    [obs] = GalileoSSI.from_index(index, row_dicts=rows[:1])
     assert obs.basename == 'c0346405900r.img'
+
+
+_RATIOS = ('ENCODING_COMPRESSION_RATIO', 'ENCODING_MIN_COMPRESSION_RATIO',
+           'ENCODING_MAX_COMPRESSION_RATIO')
+_ROTATED = ('ENCODING_MIN_COMPRESSION_RATIO', 'ENCODING_MAX_COMPRESSION_RATIO',
+            'ENCODING_COMPRESSION_RATIO')
+
+
+# The current indexes, whose labels name the ratio columns in the rotated order, give each
+# value under the name of the ratio it holds; an index corrected by renaming the columns,
+# or made again with the values moved, keeps the names it gives
+@pytest.mark.parametrize(('order', 'created', 'ratios'), [
+    (_ROTATED, '2025-10-30T13:48:44', (1.5, 2.5, 3.5)),
+    (_RATIOS, '2025-10-30T13:48:44', (1.5, 2.5, 3.5)),
+    (_ROTATED, '2026-12-01T00:00:00', (3.5, 1.5, 2.5)),
+], ids=['rotated', 'renamed', 'made-again'])
+def test_from_index_ratio_columns(tmp_path: pathlib.Path, order: tuple[str, ...],
+                                  created: str, ratios: tuple[float, ...]) -> None:
+    columns = _INDEX_COLUMNS + [(name, 'ASCII_REAL', 8) for name in order]
+    rows = [(*row, 1.5, 2.5, 3.5) for row in _INDEX_ROWS]
+    write_supplement(tmp_path)
+    index = write_table(tmp_path, 'GO_0017_index', 'IMAGE_INDEX_TABLE', columns, rows,
+                        PRODUCT_CREATION_TIME=created, **_INDEX_KEYWORDS)
+    obs = next(GalileoSSI.from_index(index))
+    assert tuple(obs.dict[name] for name in _RATIOS) == ratios
 
 
 def test_from_index_clock_count_subfield(tmp_path: pathlib.Path) -> None:
@@ -1757,23 +1931,37 @@ def test_from_index_refuses_no_supplement(tmp_path: pathlib.Path) -> None:
 
 
 def test_from_index_rows_need_no_supplement(tmp_path: pathlib.Path) -> None:
-    rows = GalileoSSI._read_index_rows(write_index(tmp_path))
-    assert len(list(GalileoSSI.from_index(tmp_path / 'x.lbl', row_dicts=rows,
+    index = write_index(tmp_path)
+    assert len(list(GalileoSSI.from_index(index, row_dicts=index_rows(index),
                                           supplement=None))) == 3
+
+
+def test_from_index_given_rows_need_the_label(tmp_path: pathlib.Path) -> None:
+    """The label decides whether the ratio columns are rotated, so it is read."""
+
+    rows = index_rows(write_index(tmp_path))
+    with pytest.raises(FileNotFoundError, match=r'missing\.lbl'):
+        GalileoSSI.from_index(tmp_path / 'missing.lbl', row_dicts=rows)
 
 
 def test_from_index_uses_a_given_label(tmp_path: pathlib.Path,
                                        monkeypatch: pytest.MonkeyPatch) -> None:
+    """A given label is used as it is and the index label is not parsed again."""
+
     index = write_volume(tmp_path)
     label = Pds3Label(index)
     labels: list[Any] = []
-    read_index_rows = GalileoSSI._read_index_rows
+    index_rows_ = GalileoSSI._index_rows
 
     def spy(filepath: Any, **kwargs: Any) -> Any:
         labels.append(kwargs['label'])
-        return read_index_rows(filepath, **kwargs)
+        return index_rows_(filepath, **kwargs)
 
-    monkeypatch.setattr(GalileoSSI, '_read_index_rows', spy)
+    def parse(*args: Any) -> None:
+        raise AssertionError('the index label was parsed again')
+
+    monkeypatch.setattr(GalileoSSI, '_index_rows', spy)
+    monkeypatch.setattr(oops.Host, '_parse_index_label', parse)
     GalileoSSI.from_index(index, label=label)
     assert labels == [label]
 

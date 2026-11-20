@@ -15,7 +15,7 @@ The detectors and support methods that a Host subclass overrides or calls, such 
 """
 
 import pathlib
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from typing import Any
 
 from filecache import FCPath
@@ -34,19 +34,24 @@ from oops.path import Path
 __all__ = ['GalileoSSI']
 
 class GalileoSSI(Host):
+    # False: every SSI index lists its files in its supplement's order, so the rows are
+    # paired by position. METADATA_INDEX_EXAMPLE is the metadata index that the message
+    # refusing a volume's own index gives as an example.
+    MERGE_SUPPLEMENT_BY_FILE: bool
+    METADATA_INDEX_EXAMPLE: str | None
     # The runtime names the first parameter `fileinfo`, where Host names it `filepath`.
     # Given the image file, only it is read; given a PDS3 label, the label and its image
     # file are read and their metadata merged, except that with astrometry=True the label
     # is read alone and the image file need not exist. A value that no label read gives
-    # has no subfield and no dict key; each item that both give takes its value from one
-    # fixed label. A label or VICAR header that cannot be parsed, or a label with no
+    # is left out of the subfields and dict; each item that both give takes its value from
+    # one fixed label. A label or VICAR header that cannot be parsed, or a label with no
     # IMAGE pointer, raises oops.host.PdsHostError or VicarHostError, both subclasses of
     # HostFormatError. HostFormatError itself is raised for an image for which no label
     # read gives the exposure, the time, or the telemetry format, and for a full read of
     # parsed content that has no file path. A missing image file behind a label raises
     # FileNotFoundError. select must be None (oops.OopsValueError), and any other keyword
     # raises oops.OopsTypeError. Unless a frame is given, an image whose pointing the C
-    # kernels do not hold raises oops.OopsSpiceError, whose cause is the SPICE exception.
+    # kernels lack raises oops.OopsSpiceError, whose cause is the SPICE exception.
     @staticmethod
     def from_file(  # type: ignore[override]
         fileinfo: str | pathlib.Path | FCPath | Pds3Label | VicarLabel
@@ -65,14 +70,16 @@ class GalileoSSI(Host):
     # one in a volume's INDEX directory raises oops.host.HostIndexError. The supplement
     # is required: None raises oops.host.HostIndexError unless row_dicts is given. select
     # must be None (oops.OopsValueError), and any other keyword raises
-    # oops.OopsTypeError. The iterator builds each row's Snapshot when it reaches the row
-    # and ends at the first row that raises.
+    # oops.OopsTypeError. The call reads only the labels; the iterator reads the two
+    # tables a few rows at a time, pairs each index row with the supplement row in the
+    # same position, builds each row's Snapshot when it reaches the row, and ends at the
+    # first row that raises. Rows whose files differ raise oops.host.HostIndexError there.
     @staticmethod
     def from_index(
         filepath: str | pathlib.Path | FCPath, *,
         supplement: str | pathlib.Path | FCPath | object | None = ...,
         label: Pds3Label | None = None,
-        row_dicts: list[dict[str, Any]] | None = None,
+        row_dicts: Iterable[dict[str, Any]] | None = None,
         pds3_options: dict[str, Any] | None = None,
         filter: dict[str, Any] | None = None, full_fov: bool = False,
         return_all_planets: bool = False,
