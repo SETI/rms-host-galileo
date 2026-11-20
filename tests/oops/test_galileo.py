@@ -125,6 +125,18 @@ def test_tdb_from_sclk_rejects_invalid_counts(count: str) -> None:
         _Galileo.tdb_from_sclk(count)
     assert repr(count) in str(info.value)
 
+
+def test_tdb_from_sclk_raises_oops_spice_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail(sc: int, count: str) -> float:
+        raise ValueError('SPICE(VALUEOUTOFRANGE) -- sigerr -- count out of range')
+
+    monkeypatch.setattr(galileo_module.cspyce, 'scs2e', fail)
+    with pytest.raises(oops.OopsSpiceError,
+                       match=r"^no time for Galileo clock count '99999999\.00' for "
+                             r"X\.IMG: SPICE\(VALUEOUTOFRANGE\)$") as info:
+        _Galileo.tdb_from_sclk('99999999.00', filepath='X.IMG')
+    assert type(info.value.__cause__) is ValueError
+
 ##########################################################################################
 # initialize_kernels()
 ##########################################################################################
