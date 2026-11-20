@@ -275,10 +275,10 @@ _RULES = {
     'INTERCEPT_POINT_LINE_SAMPLE'   : _HEADER,  # 1,066 of 3,753
     'INTERCEPT_POINT_LONGITUDE'     : _HEADER,  # 848 of 3,902
     'LOCAL_HOUR_ANGLE'              : _HEADER,  # 419 of 3,847
-    'NORTH_AZIMUTH'                 : _HEADER,  # 6,948 of 14,550
+    'NORTH_AZIMUTH'                 : _HEADER,  # 6,948 of 11,360
     'PHASE_ANGLE'                   : _HEADER,  # 8,720 of 10,545
-    'SUB_SOLAR_AZIMUTH'             : _HEADER,  # 213 of 14,550
-    'SUB_SPACECRAFT_AZIMUTH'        : _HEADER,  # 4,898 of 14,550
+    'SUB_SOLAR_AZIMUTH'             : _HEADER,  # 213 of 11,360
+    'SUB_SPACECRAFT_AZIMUTH'        : _HEADER,  # 4,898 of 11,360
     'SUB_SPACECRAFT_LONGITUDE'      : _HEADER,  # 778 of 3,753
     'TWIST_ANGLE'                   : _HEADER,  # 4,260 of 14,573
 
@@ -316,7 +316,7 @@ _RULES = {
     # Checked against SPICE: the label is nearer in 5,419 of 6,560 differing Earth-flyby
     # products and right by definition in 301 Moon images (the planet the Moon orbits is
     # the Earth; the header gives the Moon's own distance); the header is nearer in 1,737
-    # of 1,748 tour products, where the label is off by a median 64 km. 8,745 of 12,648
+    # of 1,748 tour products, where the label is off by a median 64 km. 8,745 of 11,900
     # differ beyond rounding.
     'CENTRAL_BODY_DISTANCE'         : _LABEL,
 
