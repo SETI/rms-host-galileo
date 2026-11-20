@@ -285,6 +285,16 @@ def test_row_items_drop_a_placeholder(column: str, value: Any) -> None:
     assert _ssi_labels.row_items({column: value}) == {}
 
 
+@pytest.mark.parametrize(('index', 'label'), [
+    ('GO-J/JSA-SSI-2-REDR-V1.0', 'GO-J/JSA-SSI-2-REDR-V1.1'),
+    ('GO-J/JSA-SSI-4-REDR-V1.0', 'GO-J/JSA-SSI-4-REDR-V1.1'),
+    ('GO-A/E-SSI-2-REDR-V1.1', 'GO-A/E-SSI-2-REDR-V1.1'),
+], ids=['tour', 'tour-repaired', 'cruise'])
+def test_row_items_give_the_labels_data_set_version(index: str, label: str) -> None:
+    items = _ssi_labels.row_items({'DATA_SET_ID': np.str_(index.ljust(28))})
+    assert items == {'DATA_SET_ID': label}
+
+
 # The tour indexes write the ratio, minimum, and maximum of GO_0021/C21/IO/C0506406074R
 # (3.758, 3.03, 5.428 in its label) as 5.428, 3.758, 3.03
 def test_row_items_name_the_rotated_compression_ratios() -> None:

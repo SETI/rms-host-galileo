@@ -106,6 +106,10 @@ write each image's three ratios in the wrong columns. The value in
 of 5.428, while the index gives 5.428, 3.758, and 3.03. The host gives each value under
 the name of the ratio it is, as the product label does.
 
+The same indexes give every image of the Jupiter tour the data set version 1.0, as in
+``GO-J/JSA-SSI-2-REDR-V1.0``, while every product label gives version 1.1. The host
+gives ``DATA_SET_ID`` as the product label does.
+
 The subfields are those of an image read from its label (see
 :doc:`user_guide_metadata`), except ``data``, ``label_dict``, and ``header_dict``. The
 telemetry format comes from the supplement, so a row passed in ``row_dicts`` without the

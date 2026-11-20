@@ -118,7 +118,8 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   placeholder in `_INDEX_PLACEHOLDERS` dropped: the `-1` windows and ICT values, the 0
   compression ratios, and the tour's `SMEAR_MAGNITUDE` 0.1, never real values). It
   renames the three compression ratios (`_INDEX_RATIO_COLUMNS`), which the GO_0017-GO_0023
-  indexes write in rotated columns. It ignores the table reader's masks: the
+  indexes write in rotated columns, and gives the tour's `DATA_SET_ID` the labels'
+  version 1.1 (`_INDEX_VALUE_REPAIRS`). It ignores the table reader's masks: the
   indexes declare real values as null constants (`EXPOSURE_DURATION` 0, the
   `ON_CHIP_MOSAIC_FLAG` N, `PRODUCT_VERSION_ID` 0), and honoring them drops zero-exposure
   rows.

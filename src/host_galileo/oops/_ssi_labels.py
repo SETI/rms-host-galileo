@@ -74,6 +74,14 @@ _INDEX_RATIO_COLUMNS = {
     'ENCODING_MAX_COMPRESSION_RATIO': 'ENCODING_MIN_COMPRESSION_RATIO',
 }
 
+# The index values that the product labels give differently, and the labels' value. The
+# indexes give all 3,993 images of the Jupiter tour data set version 1.0, where every
+# product label and every volume's own index give version 1.1 (rms-data-projects #258).
+_INDEX_VALUE_REPAIRS = {
+    'DATA_SET_ID': {'GO-J/JSA-SSI-2-REDR-V1.0': 'GO-J/JSA-SSI-2-REDR-V1.1',
+                    'GO-J/JSA-SSI-4-REDR-V1.0': 'GO-J/JSA-SSI-4-REDR-V1.1'},
+}
+
 # The PDS3 keywords and the VICAR keywords that give the same whole value. Some values
 # have the same name in both, such as CUT_OUT_WINDOW and TARGET_CENTER_DISTANCE; they need
 # no entry. The phase-1 headers of GO_0002-GO_0016 spell PARTITION as PARTITIO.
@@ -455,10 +463,12 @@ def row_items(row_dict):
         given under the names of the ratios they hold: the value of the index's
         ENCODING_COMPRESSION_RATIO as ENCODING_MAX_COMPRESSION_RATIO, of its
         ENCODING_MIN_COMPRESSION_RATIO as ENCODING_COMPRESSION_RATIO, and of its
-        ENCODING_MAX_COMPRESSION_RATIO as ENCODING_MIN_COMPRESSION_RATIO. The "_mask"
-        keys that the table reader adds are left out, and its masks are not applied: the
-        SSI indexes declare real values as null constants, such as an EXPOSURE_DURATION
-        of 0 and an ON_CHIP_MOSAIC_FLAG of N.
+        ENCODING_MAX_COMPRESSION_RATIO as ENCODING_MIN_COMPRESSION_RATIO. The
+        DATA_SET_ID of the Jupiter tour, which the index gives as version 1.0, is given as
+        version 1.1, as every product label gives it. The "_mask" keys that the table
+        reader adds are left out, and its masks are not applied: the SSI indexes declare
+        real values as null constants, such as an EXPOSURE_DURATION of 0 and an
+        ON_CHIP_MOSAIC_FLAG of N.
     """
 
     items = {}
@@ -469,6 +479,7 @@ def row_items(row_dict):
         value = value.tolist() if isinstance(value, (np.ndarray, np.generic)) else value
         if isinstance(value, str):
             value = value.strip()
+            value = _INDEX_VALUE_REPAIRS.get(key, {}).get(value, value)
         if (value != _VICAR_FILL and value != _INDEX_PLACEHOLDERS.get(key)
                 and not is_null(value)):
             items[key] = value

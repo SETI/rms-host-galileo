@@ -617,7 +617,9 @@ class GalileoSSI(oops.Host):
             tables' other null constants are kept, because they also mark real values,
             such as an exposure of 0. The three compression ratios are given under the
             names that the product labels give them, which the index writes in rotated
-            columns. No row is dropped.
+            columns, and the DATA_SET_ID of an image of the Jupiter tour has the
+            version 1.1 of the product labels, where the index writes 1.0. No row is
+            dropped.
             The C kernels are not checked for pointing when the Snapshot is built. For an
             image whose pointing they cannot supply, the default frame raises
             oops.OopsSpiceError when it is evaluated.
