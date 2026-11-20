@@ -73,11 +73,11 @@ planet:
 
    GalileoSSI.initialize(planets=(5,))
 
-Later calls to :meth:`~host_galileo.oops.ssi.GalileoSSI.initialize` have no effect.
+Later calls to :meth:`~host_galileo.oops.ssi.GalileoSSI.initialize` are ignored.
 
 Image files and indexes
 =======================
 
-The host needs no environment variable for the archive itself. Each image file, PDS3
-label, or index is passed by its path or URL, and a remote file is retrieved and cached
-when it is read.
+Each image file, PDS3 label, or index is passed by its path or URL, so the archive
+itself needs no environment variable. A remote file is retrieved and cached when it is
+read.

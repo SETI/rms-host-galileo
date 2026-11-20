@@ -68,7 +68,7 @@ from the same label, for every image. The VICAR header supplies these items:
        parts. The header gives each image's own.
 
 The PDS3 label supplies every other item, including ``TARGET_NAME``,
-``CENTRAL_BODY_DISTANCE``, and ``COMPRESSION_TYPE``. If the chosen label gives no value
+``CENTRAL_BODY_DISTANCE``, and ``COMPRESSION_TYPE``. If the chosen label lacks a value
 for an item, the other label's value is used.
 
 Missing values
@@ -85,10 +85,26 @@ for it, and never a None or a placeholder in its place. These count as no value:
   before the Jupiter tour give in place of a time from closest approach;
 - a ``SMEAR`` of 0.1 in the VICAR header, which every header of the Jupiter tour gives,
   while every PDS3 label gives ``UNK`` for the smear;
-- a set of VICAR time fields that makes no valid time, such as an hour of 24;
+- the values that each volume's ``CATALOG/DATASET.CAT`` documents as not implemented or
+  not applicable: a ``CONE_ANGLE``, ``SMEAR_AZIMUTH``, or ``CENTER_RING_RADIUS`` of 0,
+  and a ``SOLAR_DISTANCE`` of 777909100 km, which is Jupiter's distance from the Sun even
+  in the images of Venus, the Earth, and Gaspra that give it, together with the VICAR
+  header's ``CONE``, ``SMRAZ``, ``RAD``, and ``SOLRANGE`` of the same values;
+- a ``RIGHT_ASCENSION``, ``DECLINATION``, and ``TWIST_ANGLE`` that are all 0 (``RA``,
+  ``DEC``, and ``TWIST`` in the VICAR header), which is how both labels write an image
+  whose pointing the C kernels lacked when the labels were made; one of them alone at 0
+  is a real value and is kept;
+- a set of VICAR time fields that is not a valid time, such as an hour of 24;
 - an ``ORBIT_NUMBER`` outside the Jupiter tour's orbits 0 to 35. The labels of the
   earlier volumes give the first two characters of the observation ID read as a number,
   such as 12613 for ``E1``.
+
+The labels made before the Jupiter tour give the time from closest approach as
+``TIME_FROM_CLOSEST_APPROACH`` and ``SATELLITE_TIME_FROM_CLST_APR``. The host gives them
+under the names that the tour labels use, ``NTV_TIME_FROM_CLOSEST_APPROACH`` and
+``NTV_SAT_TIME_FROM_CLOSEST_APRH``. The VICAR header's ``TCA`` and the indexes' columns
+take the same names (see :doc:`user_guide_index`), so each item has one name whichever
+file gave it.
 
 The dictionaries
 ================

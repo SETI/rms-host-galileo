@@ -18,7 +18,7 @@ What is read
 
 What the host reads depends on the file it is given and on the ``astrometry`` option.
 An astrometry read is for work that needs only the image's time and geometry, so it
-reads no image array.
+skips the image array.
 
 .. list-table::
    :header-rows: 1
@@ -55,7 +55,7 @@ image file, also when the input is the label. ``abspath`` is the image file's pa
 the local disk, so it is present only when the file is local or is already in the local
 cache of a remote file. After an astrometry read of a remote label, the image file has
 not been retrieved, so ``abspath`` is absent unless an earlier read put the file in the
-cache. Opening an image never creates a directory.
+cache. Opening an image leaves the directories of the file system as they are.
 
 Parsed input
 ============
@@ -73,9 +73,15 @@ raises :exc:`~oops.host.HostFormatError`, whose message says that no file path i
 known.
 
 The ``header_dict`` subfield holds the VICAR header as the file writes it. A
-:class:`~vicar.VicarImage` sets its ``HOST`` to the machine that read it, so when a
-:class:`~vicar.VicarImage` that has a file path is passed in, the host reads the header
-again from that file.
+:class:`~vicar.VicarImage` sets its ``HOST`` and ``BHOST`` to the machine that read it,
+so when a :class:`~vicar.VicarImage` that has a file path is passed in, the host reads
+the header again from that file. A :class:`~vicar.VicarImage` without a file path, such
+as one made by ``VicarImage.from_file()``, which keeps no path, has only the header that
+it holds, so its ``header_dict`` gives the reading machine as ``HOST`` and ``BHOST``.
+
+Parsed input can also be passed to :meth:`oops.host.Host.from_file`, which identifies it
+as an SSI label or image and passes it on to
+:meth:`~host_galileo.oops.ssi.GalileoSSI.from_file` as it is.
 
 Options
 =======
@@ -106,7 +112,7 @@ The standard OOPS overrides, ``target``, ``lightsource``, ``path``, ``frame``,
 ``cadence``, ``fov``, ``calibrations``, ``timeshift``, ``navigation``, ``tracker``, and
 ``parallel``, replace what the host would otherwise build. They are listed with
 :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file`. Any other keyword raises
-:exc:`~oops.OopsTypeError`, so that a misspelled argument is not silently ignored.
+:exc:`~oops.OopsTypeError`, so that a misspelled argument is caught.
 
 Reading a label through oops.Host
 =================================

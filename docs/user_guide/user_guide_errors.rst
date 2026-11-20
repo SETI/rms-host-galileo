@@ -11,12 +11,13 @@ Reading an image file
 :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file` raises:
 
 :exc:`oops.OopsSpiceError`
-    The C kernels hold no pointing for the scan platform at the middle of the exposure.
-    The message reads "no Galileo SSI pointing at <time> for <image file>: <code>",
-    ending with the SPICE error code, such as ``SPICE(CKINSUFFDATA)``. It is never
-    raised when the caller supplies the pointing with the ``frame`` override. The same
-    class is raised when the time must come from the clock count and the clock kernel
-    cannot convert it; that message begins "no time for Galileo clock count".
+    The C kernels lack the pointing of the scan platform at the middle of the exposure,
+    after any ``cadence`` override and any ``timeshift`` of the cadence. The message
+    reads "no Galileo SSI pointing at <time> for <image file>: <code>", ending with the
+    SPICE error code, such as ``SPICE(CKINSUFFDATA)``. It is never raised when the
+    caller supplies the pointing with the ``frame`` override. The same class is raised
+    when the time must come from the clock count and the clock kernel cannot convert it;
+    that message begins "no time for Galileo clock count".
 
 :exc:`~oops.host.HostFormatError`
     No label read gives the exposure duration, the telemetry format, or a time
@@ -57,43 +58,53 @@ Reading a PDS3 index
 called:
 
 :exc:`~oops.host.HostIndexError`
-    The index is a volume's own index, in its ``INDEX`` directory; ``supplement`` is None
-    and ``row_dicts`` is not given; either table cannot be read as an index table; an
-    image appears in only one of the index and the supplement; the two tables list the
-    images in different orders and one of them lists an image twice; or the index's file
-    name holds no ``_index`` from which to find the supplement.
+    The index is a volume's own index, in a directory named ``INDEX`` in upper or lower
+    case; ``supplement`` is None and ``row_dicts`` is not given; the index's file name
+    lacks the ``_index`` from which to find the supplement; a label does not describe a
+    table that can be read; or a table lacks ``VOLUME_ID`` or
+    ``FILE_SPECIFICATION_NAME``.
 
 :exc:`~oops.host.PdsHostError`
     The label of the index or of the supplement cannot be parsed.
 
 :exc:`FileNotFoundError`
-    The supplemental index does not exist.
+    The label of the supplemental index does not exist.
 
 :exc:`~oops.OopsTypeError`
-    A keyword argument is not one that the method accepts, or a range in ``filter``
-    cannot be compared with the values of its column.
+    A keyword argument is not one that the method accepts.
 
 :exc:`~oops.OopsValueError`
-    ``select`` is not None, ``filter`` holds a column that no row has, or
+    ``select`` is not None, ``filter`` holds a column that neither table has, or
     ``pds3_options`` holds an option that the parser does not accept.
 
 :exc:`~oops.host.WrongHostError`
     The file is not a Galileo SSI index.
 
 :exc:`OSError`
-    The index or a named supplement does not exist or cannot be read.
+    The label of the index or of a named supplement does not exist or cannot be read.
 
-These errors are raised when the iteration reaches the row, and the iteration ends
-there:
+A table file that does not exist or cannot be read raises :exc:`OSError` when the
+iteration starts. These errors are raised when the iteration reaches the row, and the
+iteration ends there:
+
+:exc:`~oops.host.HostIndexError`
+    The index row and the supplement row in the same position give different images; the
+    supplement ends before the index; or the table file lacks a row that its label
+    promises, or a row does not match the label. The message gives the row, counted from
+    0, and both tables. A supplement with rows left over raises the same error after the
+    last row of the index.
 
 :exc:`~oops.host.HostFormatError`
-    A row gives no exposure duration or no time (``IMAGE_TIME``, or the clock count and
+    A row lacks the exposure duration or a time (``IMAGE_TIME``, or the clock count and
     the frame duration), or its time must come from the clock count and its frame
     duration is not one of the camera's.
 
 :exc:`oops.OopsSpiceError`
     A row's time must come from the clock count, and the clock kernel cannot convert it.
 
-Building a row's Snapshot does not check the pointing. When the C kernels hold no
-pointing for an image, its Snapshot's frame raises :exc:`oops.OopsSpiceError`, with the
+:exc:`~oops.OopsTypeError`
+    A range in ``filter`` cannot be compared with the row's value.
+
+Building a row's Snapshot does not check the pointing. When the C kernels lack the
+pointing of an image, its Snapshot's frame raises :exc:`oops.OopsSpiceError`, with the
 message described above, each time the frame is evaluated.

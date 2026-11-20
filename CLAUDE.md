@@ -52,7 +52,9 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   furnishes a fixed kernel list through the SPICE file cache; the fakes make the cache
   return paths unread and record what `cspyce.furnsh` is given. The `file_cache`
   fixture gives every test its own empty default `FileCache`, so no test depends on what
-  the machine's shared cache holds.
+  the machine's shared cache holds. `fake_spice` copies the oops Path and Frame
+  registries, caches, and each class's waypoint and wayframe pools for every test, as
+  rms-host-new-horizons does, until oops has one helper for it (SETI/rms-oops#250).
 
 ## Architecture gotchas
 
@@ -75,14 +77,15 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   directory, in the label's case or the other (`_image_path`). The array always comes
   from the VICAR file's own record layout (`_read_vicar_image`), never from the record
   number in `^IMAGE`: 52 GO_0019 labels put it a record early, and the label of GO_0018
-  E4/EUROPA/C0374685452R describes the wrong layout. The holdings cannot be corrected.
+  E4/EUROPA/C0374685452R describes the wrong layout. Those product labels are part of
+  the holdings, which stay as they are.
   `header_dict` always comes from a `VicarLabel` (`_read_vicar_header`), never from a
   `VicarImage`, which replaces the file's `HOST` and `BHOST` with the reading machine's;
   a `VicarImage` passed in with a file path has its header read again from the file.
-  Parsed content without a file path gives no path subfields, and a full read of a
+  Parsed content without a file path leaves out the path subfields, and a full read of a
   `Pds3Label` or `VicarLabel` without one raises `HostFormatError` (`_known_path`).
-  `from_file()` refuses `select` other than None (`OopsValueError`) and any unknown
-  keyword (`OopsTypeError`), as `from_index()` does.
+  `from_file()` refuses `select` other than None (`oops.Host._check_select`) and any
+  unknown keyword (`_check_keywords`), as `from_index()` does.
 - A PDS3 label that the fast parser rejects, for its syntax (`PdsHostError`) or for a
   value it cannot convert such as an hour of 25 (`OopsValueError`), is retried with the
   strict parser and then the loose one (`_parse_fileinfo`); a requested method starts the
@@ -104,31 +107,46 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   else) and null list elements, and drops an `ORBIT_NUMBER` outside the tour (0-35): the
   labels of GO_0003-GO_0009 and GO_0016 give a pre-Jupiter frame the first two
   characters of its observation ID read as a 16-bit integer (12613 for `E1`).
+  `label_items()` also drops the values that DATASET.CAT documents as not implemented or
+  not applicable (`_PDS3_FILLS`: `CONE_ANGLE`, `SMEAR_AZIMUTH`, and `CENTER_RING_RADIUS`
+  0, `SOLAR_DISTANCE` 777909100), and `RIGHT_ASCENSION`, `DECLINATION`, and
+  `TWIST_ANGLE` when all three are 0 (`_drop_unknown_pointing`), and renames the
+  pre-tour `TIME_FROM_CLOSEST_APPROACH` and `SATELLITE_TIME_FROM_CLST_APR` to the tour
+  names (`_LABEL_NAMES`).
   `header_items()` strips string padding, drops fill values (numeric -999, and
-  `_VICAR_FILLS`: `PICNO` or `SPICE_C_ID` "?", `TCA` "CLOSEST TIME", `SMEAR` 0.1; time
-  fields out of range), and gives every value it converts only under its PDS3 name
+  `_VICAR_FILLS`: `PICNO` or `SPICE_C_ID` "?", `TCA` "CLOSEST TIME", `SMEAR` 0.1, the
+  documented `RAD`, `CONE`, and `SMRAZ` 0 and `SOLRANGE` 777909100; `RA`, `DEC`, and
+  `TWIST` all 0; time fields out of range), and gives every value it converts only under
+  its PDS3 name
   (design D4): the `_VICAR_PDS3_PAIRS` keywords, `RIM` and `MOD91` as the clock count,
   the `SCET`/`ERT` fields as `IMAGE_TIME`/`EARTH_RECEIVED_TIME`, `RATE` and `GAIN` as
   `FRAME_DURATION` and `GAIN_MODE_ID`. `MOD10`, `MOD8`, `FIBE`, and `MOFIBE` are not
   wholly held by any PDS3 item and keep their names. `ORBIT_NUMBER` comes from an
   observation ID that starts with a tour orbit code (the IDs of the Earth flybys `E1` and
   `E2`, Gaspra `GA`, Ida `ID`, Venus `VE`, optical navigation `OP`, and calibrations `PH`
-  name no orbit). `row_items()` cleans an index row the same way (numpy values to Python;
-  nulls, -999, `ORBIT_NUMBER` outside 0-35 (the index's -99), and each column's
-  placeholder in `_INDEX_PLACEHOLDERS` dropped: the `-1` windows and ICT values, the 0
-  compression ratios, and the tour's `SMEAR_MAGNITUDE` 0.1, never real values). It
-  renames the three compression ratios (`_INDEX_RATIO_COLUMNS`), which the GO_0017-GO_0023
-  indexes write in rotated columns, and gives the tour's `DATA_SET_ID` the labels'
-  version 1.1 (`_INDEX_VALUE_REPAIRS`). It ignores the table reader's masks: the
-  indexes declare real values as null constants (`EXPOSURE_DURATION` 0, the
-  `ON_CHIP_MOSAIC_FLAG` N, `PRODUCT_VERSION_ID` 0), and honoring them drops zero-exposure
-  rows.
+  begin with no orbit code). `row_items()` cleans an index row the same way (numpy
+  values to Python; nulls, -999, `ORBIT_NUMBER` outside 0-35 (the index's -99), every
+  value the table reader masks because the table declares it as the column's constant
+  (the `-1` windows and ICT values, the 0 compression ratios) except in the three
+  `_REAL_NULL_CONSTANTS` columns, the tour's undeclared `SMEAR_MAGNITUDE` 0.1
+  (`_INDEX_PLACEHOLDERS`), and the `_PDS3_FILLS` and all-zero pointing, as for a label).
+  Following the declarations keeps a corrected table right; the three real values that
+  the current tables declare (`EXPOSURE_DURATION` 0, `ON_CHIP_MOSAIC_FLAG` N,
+  `PRODUCT_VERSION_ID` 0) are kept, so zero-exposure rows keep their exposure. With
+  `rotated_ratios` it renames the three compression ratios (`_INDEX_RATIO_COLUMNS`),
+  which every current SSI index writes in rotated columns. `ratios_rotated()` decides
+  that once per table from the index label: the three columns named in the byte order
+  MIN, MAX, RATIO, and a `PRODUCT_CREATION_TIME` no later than `_LAST_ROTATED_LABEL`, so
+  a corrected index keeps its names (rms-data-projects #258 item 8). It gives the tour's
+  `DATA_SET_ID` the labels' version 1.1 (`_INDEX_VALUE_REPAIRS`) and the shortened
+  `NTV_SAT_TIME_FROM_CLOSEST_APR` the labels' name (`_INDEX_NAMES`); both leave a
+  corrected row as it is.
 - `merge_items()` keeps every item of either source. Where both give an item and the
   values differ, `resolve()` keeps the source that `_RULES` names for that item, the same
   for every image, or the PDS3 label for an item with no rule; there is no per-image test.
   Each rule cites its evidence (survey counts, SPICE checks, DATASET.CAT) and #41, which
   lists every difference, each rule's reason, and the images on which its source is
-  wrong. A value missing from the winning source falls to the other; nothing else does.
+  wrong. Only a value missing from the winning source falls to the other.
   `dict` is the merged result; `label_dict` and `header_dict` are present only when read.
   A missing value is never `None` or a placeholder: no key, no subfield.
 - `_make_snapshot()` computes everything from the merged items, so a label read with its
@@ -137,46 +155,49 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   `HostFormatError` naming the item and the file; an index row without a telemetry format
   (one read without its supplement) gets the full frame instead (`_INDEX_DEFAULT_MODE`).
 - Missing pointing goes through `oops.Host._check_spice_frame()` at the midtime after any
-  cadence override, only when no `frame` is given. `from_file()` raises
-  `oops.OopsSpiceError` at load, naming the image file; `from_index()` raises nothing
-  and drops no row, but gives such a row an `oops.frame.SpiceErrorFrame`, which raises
-  the same error whenever it is evaluated. A clock count that the clock kernel cannot
-  convert raises `OopsSpiceError` from `_Galileo.tdb_from_sclk()`. The path subfields come
-  from `oops.Host._apply_overrides()`, which gives `abspath` only for a file that is
-  local or already in the cache and never creates a directory.
+  cadence override and any "T" timeshift, only when no `frame` is given. `from_file()`
+  raises `oops.OopsSpiceError` at load, naming the image file. In `from_index()`, every
+  row gives a Snapshot; a row whose pointing the C kernels lack gets an
+  `oops.frame.SpiceErrorFrame`, which raises the same error whenever it is evaluated. A
+  clock count that the clock kernel cannot convert raises `OopsSpiceError` from
+  `_Galileo.tdb_from_sclk()`. The path subfields come from
+  `oops.Host._apply_overrides()`, which gives `abspath` only for a file that is local or
+  already in the cache and leaves the file system as it is.
 - `IMAGE_TIME` is the middle of the exposure. Without it, the start time comes from
   `SPACECRAFT_CLOCK_START_COUNT` plus the shutter delay for the `FRAME_DURATION`
   (`_SHUTTER_DELAY`), one frame earlier for an `EXTENDED` exposure taken before the
   phase-2 flight software of the Jupiter tour (`_PHASE2_FIRST_RIM`).
-- An SSI supplemental index writes `SPACECRAFT_CLOCK_START_COUNT` in SPICE form and the
-  index in label form, so the default validation of `oops.Host._read_index_rows()`, which
-  compares every shared column, rejects every real pair. `GalileoSSI.from_index()` passes
-  `validate=_INDEX_KEYS` to check rows on `VOLUME_ID` and `FILE_SPECIFICATION_NAME`
-  instead. `oops.Host._read_index_rows()` pairs the rows by position when the two tables
-  list the same files in the same order (every GO volume does) and otherwise by its
-  default file key, the same two columns. By default (`supplement=oops.Host.SUPPLEMENT`, as in `oops.Host.from_index`)
-  it reads the supplement beside the index, which must exist: an index without one
-  raises `FileNotFoundError`, and `supplement=None` raises `HostIndexError` rather than
-  meaning "search". It takes `label=` like the base, refuses any `select` but None
-  (`OopsValueError`, since each row is one observation), and refuses any other keyword
-  (`OopsTypeError`). Index values win the merge, so the clock count stays in label
-  form. A row's `FILE_SPECIFICATION_NAME` names the label; the Snapshot's `filepath`
-  names the image beside it, with `.IMG` (or `.img`) in place of `.LBL`, as a full path
-  or URL: `_volumes_directory()` finds the volume directories from the index's own
+- `GalileoSSI.from_index()` reads the index through `oops.Host._index_rows()`, which
+  streams both tables (`PdsTable(defer_load=True).iter_dicts`, a few rows at a time),
+  pairs, validates, and filters each row as the iteration reaches it; it is the host's
+  only reader of tables. `MERGE_SUPPLEMENT_BY_FILE = False`: every SSI metadata index lists
+  its files in its supplement's order (a survey of all 23, 29,324 rows), so the rows are
+  paired by position, and a row whose files differ raises `HostIndexError` at that row.
+  `METADATA_INDEX_EXAMPLE` makes `_index_rows()` refuse a volume's own index (a file in
+  a directory named `INDEX` in either case) before anything is read, also with
+  `row_dicts`: it has no supplement, and its file specifications start with the volume
+  ID and name the image. The supplement writes `SPACECRAFT_CLOCK_START_COUNT` in SPICE
+  form and the index in label form, so the default validation, which compares every
+  shared column, would reject every real pair until the index is corrected;
+  `validate=_INDEX_KEYS` checks `VOLUME_ID` and `FILE_SPECIFICATION_NAME` instead. By
+  default (`supplement=oops.Host.SUPPLEMENT`) the supplement beside the index is read,
+  and it must exist (`FileNotFoundError`); `supplement=None` raises `HostIndexError`
+  unless `row_dicts` is given. Index values win the merge, so the clock count stays in
+  label form. The index label is parsed again after `_index_rows()` (unless `label` is
+  given) for `ratios_rotated()`, also with `row_dicts`, so the label must exist then.
+  A row's `FILE_SPECIFICATION_NAME` names the label; the Snapshot's `filepath` names the
+  image beside it, with `.IMG` (or `.img`) in place of `.LBL`, as a full path or URL:
+  `oops.Host._volumes_directory()` finds the volume directories from the index's own
   location (`volumes` in place of `metadata` in an RMS Node metadata tree, else the
   index's directory), and the row's `VOLUME_ID` and file specification complete the
-  path (design D5). A volume's own index (any file in a directory named `INDEX`) raises
-  `HostIndexError` before anything is read, also with `row_dicts`: it has no supplement,
-  and its file specifications start with the volume ID and name the image.
-  `_read_index_rows()` is a classmethod that raises `WrongHostError` for another host's
-  index, so call it through `GalileoSSI`. `_detect_in_index()` returns None for a label
-  without `INSTRUMENT_HOST_NAME` (a volume's own index), so `oops.Host.from_index()`
-  identifies the host from the first row; otherwise it identifies it from the label.
-  Either way it passes the call to `GalileoSSI.from_index()`, which reads the rows.
-- `GalileoSSI.from_index()` returns an iterator. It checks its arguments and reads and
-  filters the tables itself, then returns a generator that builds each row's Snapshot
-  when the iteration reaches it, so only an error in one row waits for that row. It must
-  not be a generator function, which would defer every error to the first `next()`.
+  path (design D5). `_detect_in_index()` returns None for a label without
+  `INSTRUMENT_HOST_NAME` (a volume's own index), so `oops.Host.from_index()` identifies
+  the host from the first row; otherwise it identifies it from the label. Either way it
+  passes the call to `GalileoSSI.from_index()`.
+- `GalileoSSI.from_index()` returns an iterator. It checks its arguments and reads the
+  labels, then returns a generator that builds each row's Snapshot when the iteration
+  reaches it. It must not be a generator function, which would defer every call-time
+  error to the first `next()`.
 - The hosts apply the standard overrides through `oops.Host._apply_overrides()`, passing
   them to `_make_snapshot()` as one `overrides` dict, as rms-host-cassini does.
 - TARGET_NAME repairs and the star targets that become light sources are in `ssi.py`
