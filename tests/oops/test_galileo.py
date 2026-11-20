@@ -137,6 +137,17 @@ def test_tdb_from_sclk_raises_oops_spice_error(monkeypatch: pytest.MonkeyPatch) 
         _Galileo.tdb_from_sclk('99999999.00', filepath='X.IMG')
     assert type(info.value.__cause__) is ValueError
 
+
+# A failure whose message lacks a SPICE error code is not a SPICE data problem
+def test_tdb_from_sclk_lets_another_failure_through(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail(sc: int, count: str) -> float:
+        raise ValueError('not a SPICE failure')
+
+    monkeypatch.setattr(galileo_module.cspyce, 'scs2e', fail)
+    with pytest.raises(ValueError, match=r'^not a SPICE failure$'):
+        _Galileo.tdb_from_sclk('99999999.00', filepath='X.IMG')
+
 ##########################################################################################
 # initialize_kernels()
 ##########################################################################################

@@ -28,9 +28,6 @@ TIMELINE = [
 for _phase in TIMELINE:
     _phase['ET'] = julian.tdb_from_tai(julian.tai_from_iso(_phase['UTC']))
 
-# The exceptions that cspyce raises for SPICE data the loaded kernels do not hold
-_SPICE_ERRORS = (LookupError, OSError, RuntimeError, ValueError)
-
 # The fixed set of kernels furnished by _Galileo.load_kernels(), relative to the SPICE
 # file cache prefix
 _KERNELS = [
@@ -288,7 +285,8 @@ class _Galileo:
             OopsSpiceError: If the clock kernel cannot convert the count, such as one
                 outside the clock's partitions. Its message is "no time for Galileo clock
                 count '<count>' for <file>: <SPICE error code>", and its cause is the
-                SPICE exception.
+                SPICE exception. A failure of the conversion whose message lacks a SPICE
+                error code is raised as it is.
         """
 
         _Galileo.load_sclk()
@@ -302,7 +300,9 @@ class _Galileo:
         try:
             return cspyce.scs2e(_Galileo.SPACECRAFT_ID,
                                 ':'.join(str(int(field)) for field in fields))
-        except _SPICE_ERRORS as err:
+        except oops.OopsSpiceError.CSPYCE_ERRORS as err:
+            if not oops.OopsSpiceError.is_spice_error(err):
+                raise
             raise oops.OopsSpiceError.from_spice_error(
                 err, description=f'no time for Galileo clock count {count!r}',
                 filepath=filepath) from err
