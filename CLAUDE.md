@@ -50,7 +50,9 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
 - Tests never touch SPICE kernels or spicedb. `tests/oops/conftest.py` replaces them with
   fakes for every test, so new tests get this automatically. Unlike Cassini, Galileo
   furnishes a fixed kernel list through the SPICE file cache; the fakes make the cache
-  return paths unread and record what `cspyce.furnsh` is given.
+  return paths unread and record what `cspyce.furnsh` is given. The `file_cache`
+  fixture gives every test its own empty default `FileCache`, so no test depends on what
+  the machine's shared cache holds.
 
 ## Architecture gotchas
 
@@ -74,6 +76,13 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   from the VICAR file's own record layout (`_read_vicar_image`), never from the record
   number in `^IMAGE`: 52 GO_0019 labels put it a record early, and the label of GO_0018
   E4/EUROPA/C0374685452R describes the wrong layout. The holdings cannot be corrected.
+  `header_dict` always comes from a `VicarLabel` (`_read_vicar_header`), never from a
+  `VicarImage`, which replaces the file's `HOST` and `BHOST` with the reading machine's;
+  a `VicarImage` passed in with a file path has its header read again from the file.
+  Parsed content without a file path gives no path subfields, and a full read of a
+  `Pds3Label` or `VicarLabel` without one raises `HostFormatError` (`_known_path`).
+  `from_file()` refuses `select` other than None (`OopsValueError`) and any unknown
+  keyword (`OopsTypeError`), as `from_index()` does.
 - A PDS3 label that the fast parser rejects, for its syntax (`PdsHostError`) or for a
   value it cannot convert such as an hour of 25 (`OopsValueError`), is retried with the
   strict parser and then the loose one (`_parse_fileinfo`); a requested method starts the
@@ -90,12 +99,13 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   and `objects`; only a pointer's `_offset` holds more than its keyword, and the host
   never uses it). `header_json()` makes `header_dict`: `as_dict(unique=True)` with each
   repeated parameter keyed `"NAME[n]"` (`TASK[0]`, `TASK[1]`), the form all three VICAR
-  hosts share. `label_items()` drops PDS3 nulls (`UNK`, `N/A`, `NULL`, any case, and
-  lists of nothing else) and null list elements, and drops an `ORBIT_NUMBER` outside the
-  tour (0-35): the labels of
-  GO_0003-GO_0009 and GO_0016 give a pre-Jupiter frame the first two characters of its
-  observation ID read as a 16-bit integer (12613 for `E1`). `header_items()` strips
-  string padding, drops fill values (numeric -999, `PICNO` or `SPICE_C_ID` "?", time
+  hosts share. `label_items()` drops nulls (`_NULL_TEXTS`: `UNK`, `UNKNOWN`, `N/A`,
+  `NULL`, `NOT APPLICABLE`, `---`, and the empty string, any case, and lists of nothing
+  else) and null list elements, and drops an `ORBIT_NUMBER` outside the tour (0-35): the
+  labels of GO_0003-GO_0009 and GO_0016 give a pre-Jupiter frame the first two
+  characters of its observation ID read as a 16-bit integer (12613 for `E1`).
+  `header_items()` strips string padding, drops fill values (numeric -999, and
+  `_VICAR_FILLS`: `PICNO` or `SPICE_C_ID` "?", `TCA` "CLOSEST TIME", `SMEAR` 0.1; time
   fields out of range), and gives every value it converts only under its PDS3 name
   (design D4): the `_VICAR_PDS3_PAIRS` keywords, `RIM` and `MOD91` as the clock count,
   the `SCET`/`ERT` fields as `IMAGE_TIME`/`EARTH_RECEIVED_TIME`, `RATE` and `GAIN` as
@@ -105,8 +115,10 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   `E2`, Gaspra `GA`, Ida `ID`, Venus `VE`, optical navigation `OP`, and calibrations `PH`
   name no orbit). `row_items()` cleans an index row the same way (numpy values to Python;
   nulls, -999, `ORBIT_NUMBER` outside 0-35 (the index's -99), and each column's
-  placeholder in `_INDEX_PLACEHOLDERS` dropped: the `-1` windows and ICT values and the 0
-  compression ratios, never real values). It ignores the table reader's masks: the
+  placeholder in `_INDEX_PLACEHOLDERS` dropped: the `-1` windows and ICT values, the 0
+  compression ratios, and the tour's `SMEAR_MAGNITUDE` 0.1, never real values). It
+  renames the three compression ratios (`_INDEX_RATIO_COLUMNS`), which the GO_0017-GO_0023
+  indexes write in rotated columns. It ignores the table reader's masks: the
   indexes declare real values as null constants (`EXPOSURE_DURATION` 0, the
   `ON_CHIP_MOSAIC_FLAG` N, `PRODUCT_VERSION_ID` 0), and honoring them drops zero-exposure
   rows.
@@ -123,12 +135,14 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   count and `FRAME_DURATION`), and `TELEMETRY_FORMAT_ID` are required and raise
   `HostFormatError` naming the item and the file; an index row without a telemetry format
   (one read without its supplement) gets the full frame instead (`_INDEX_DEFAULT_MODE`).
-- Missing pointing raises `oops.OopsSpiceError` (`_check_pointing`), built with
-  `from_spice_error()` from the cspyce exception (only `LookupError`, `OSError`,
-  `RuntimeError`, `ValueError`) at the midtime after any cadence override, naming the
-  image file. Only `from_file()` checks, and only when no `frame` is given;
-  `from_index()` never checks and never drops a row. `abspath` is removed only for an
-  astrometry read of a remote label, whose image was never fetched.
+- Missing pointing goes through `oops.Host._check_spice_frame()` at the midtime after any
+  cadence override, only when no `frame` is given. `from_file()` raises
+  `oops.OopsSpiceError` at load, naming the image file; `from_index()` raises nothing
+  and drops no row, but gives such a row an `oops.frame.SpiceErrorFrame`, which raises
+  the same error whenever it is evaluated. A clock count that the clock kernel cannot
+  convert raises `OopsSpiceError` from `_Galileo.tdb_from_sclk()`. The path subfields come
+  from `oops.Host._apply_overrides()`, which gives `abspath` only for a file that is
+  local or already in the cache and never creates a directory.
 - `IMAGE_TIME` is the middle of the exposure. Without it, the start time comes from
   `SPACECRAFT_CLOCK_START_COUNT` plus the shutter delay for the `FRAME_DURATION`
   (`_SHUTTER_DELAY`), one frame earlier for an `EXTENDED` exposure taken before the
@@ -148,14 +162,16 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   form. A row's `FILE_SPECIFICATION_NAME` names the label; the Snapshot's `filepath`
   names the image beside it, with `.IMG` (or `.img`) in place of `.LBL`, as a full path
   or URL: `_volumes_directory()` finds the volume directories from the index's own
-  location (beside the volume of a volume's `INDEX` directory, `volumes` in place of
-  `metadata` in an RMS Node metadata tree, else the index's directory), and the row's
-  `VOLUME_ID` and file specification complete the path (design D5). `abspath` is set
-  only for a local file or one already in the cache.
+  location (`volumes` in place of `metadata` in an RMS Node metadata tree, else the
+  index's directory), and the row's `VOLUME_ID` and file specification complete the
+  path (design D5). A volume's own index (any file in a directory named `INDEX`) raises
+  `HostIndexError` before anything is read, also with `row_dicts`: it has no supplement,
+  and its file specifications start with the volume ID and name the image.
   `_read_index_rows()` is a classmethod that raises `WrongHostError` for another host's
-  index, so call it through `GalileoSSI`.
-  `oops.Host.from_index()` identifies the host from the index label and passes the call
-  to `GalileoSSI.from_index()`, which reads the rows.
+  index, so call it through `GalileoSSI`. `_detect_in_index()` returns None for a label
+  without `INSTRUMENT_HOST_NAME` (a volume's own index), so `oops.Host.from_index()`
+  identifies the host from the first row; otherwise it identifies it from the label.
+  Either way it passes the call to `GalileoSSI.from_index()`, which reads the rows.
 - `GalileoSSI.from_index()` returns an iterator. It checks its arguments and reads and
   filters the tables itself, then returns a generator that builds each row's Snapshot
   when the iteration reaches it, so only an error in one row waits for that row. It must

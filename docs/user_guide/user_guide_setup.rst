@@ -63,7 +63,9 @@ The first call to :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file` or
 camera's fields of view. To choose the bodies that OOPS defines, or to use only the
 instrument kernel that existed before a given date, call
 :meth:`~host_galileo.oops.ssi.GalileoSSI.initialize` before opening the first image.
-This call defines Jupiter, planet 5, and its moons, and no other planet:
+Its ``planets`` option takes one planet number, from 1 for Mercury to 9 for Pluto, or a
+sequence of them. This call defines Jupiter, planet 5, and its moons, and no other
+planet:
 
 .. code-block:: python
 

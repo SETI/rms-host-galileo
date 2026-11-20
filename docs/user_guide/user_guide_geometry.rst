@@ -9,8 +9,8 @@ Time
 begins half of ``EXPOSURE_DURATION`` earlier and ends half of it later, and the
 Snapshot's default cadence covers exactly that interval.
 
-A few images have no ``IMAGE_TIME`` in either label, such as some calibration frames in
-GO_0002 and GO_0003. For these the host computes the start of the exposure from
+A few images have no ``IMAGE_TIME`` in either label: 77 calibration frames in GO_0002 and
+GO_0003. For these the host computes the start of the exposure from
 ``SPACECRAFT_CLOCK_START_COUNT``, which every label gives, and sets the
 ``time_from_sclk`` subfield to True:
 
@@ -42,7 +42,8 @@ host accepts a sample within 40 ticks of the time it needs.
 When :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file` builds the frame from the C
 kernels, it checks at once that they hold the pointing at the middle of the exposure,
 after any ``cadence`` override. If they do not, it raises :exc:`oops.OopsSpiceError`
-(see :doc:`user_guide_errors`).
+(see :doc:`user_guide_errors`). An index row's Snapshot is built without that check, and
+its frame raises the same error only when it is evaluated (see :doc:`user_guide_index`).
 
 A caller that has better pointing can pass it with the ``frame`` override, for example
 as a :class:`~oops.frame.Cmatrix`. The host then uses that frame, does not check the C

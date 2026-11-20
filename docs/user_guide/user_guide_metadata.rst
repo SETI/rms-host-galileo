@@ -77,9 +77,14 @@ Missing values
 A value that no label read gives is left out: there is no ``dict`` key and no subfield
 for it, and never a None or a placeholder in its place. These count as no value:
 
-- the PDS3 null constants ``UNK``, ``N/A``, and ``NULL``, in any case, and a list of
-  nothing else;
+- the PDS3 null constants ``UNK``, ``N/A``, and ``NULL``, the other placeholder texts
+  ``UNKNOWN``, ``NOT APPLICABLE``, and ``---``, and an empty string, in any case, and a
+  list of nothing else;
 - a numeric -999 in the VICAR header, and a ``PICNO`` or ``SPICE_C_ID`` of ``?``;
+- a ``TCA`` of ``CLOSEST TIME`` in the VICAR header, which about half of the headers
+  before the Jupiter tour give in place of a time from closest approach;
+- a ``SMEAR`` of 0.1 in the VICAR header, which every header of the Jupiter tour gives,
+  while every PDS3 label gives ``UNK`` for the smear;
 - a set of VICAR time fields that makes no valid time, such as an hour of 24;
 - an ``ORBIT_NUMBER`` outside the Jupiter tour's orbits 0 to 35. The labels of the
   earlier volumes give the first two characters of the observation ID read as a number,
@@ -103,10 +108,12 @@ type whichever label it came from.
     ``IMAGE_TIME_fmt`` and ``^IMAGE_offset``, are left out.
 
 ``header_dict``
-    Every parameter of the VICAR header, present only when the image file was read. A
-    parameter that occurs more than once, such as the ``TASK`` of each step of the
-    processing history, is keyed by its name and its occurrence counted from zero:
-    ``TASK[0]``, ``TASK[1]``, and so on.
+    Every parameter of the VICAR header as the file writes it, present only when the
+    image file was read. A normal read and an astrometry read give the same values,
+    including ``HOST`` and ``BHOST``, the machines that wrote the file. A parameter that
+    occurs more than once, such as the ``TASK`` of each step of the processing history,
+    is keyed by its name and its occurrence counted from zero: ``TASK[0]``, ``TASK[1]``,
+    and so on.
 
 Subfields
 =========

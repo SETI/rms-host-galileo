@@ -11,7 +11,9 @@ It returns an iterator, which gives the Snapshots row by row, in the order of th
 The call itself checks the arguments and reads the index, so a wrong argument or an index
 that cannot be read raises an error at once. Each row's Snapshot is built only when the
 iteration reaches that row, so an error in a row is raised there, after the rows before
-it. To build every row at once, pass the iterator to ``list()``:
+it. The iteration ends at that row: the rows after it are not given. The ``filter``
+argument, described below, can leave such a row out. To build every row at once, pass
+the iterator to ``list()``:
 
 .. code-block:: python
 
@@ -33,6 +35,12 @@ for the same images. The host needs both. Each row of the supplement is
 merged into the matching row of the index; where both tables give a column, the index's
 value is kept.
 
+A volume also carries its own PDS3 index, in its ``INDEX`` directory, such as
+``GO_0017/INDEX/IMGINDEX.LBL``. That index has no supplement, so it lacks the telemetry
+format and the cutout window of each image, and the host does not read it. An index in
+a directory named ``INDEX``, in any case, raises :exc:`~oops.host.HostIndexError`, with a
+message that points to the metadata index instead.
+
 The ``supplement`` argument chooses the supplemental index:
 
 - By default, the host reads the file beside the index whose name has
@@ -47,7 +55,7 @@ with the supplement row in the same position. When they do not, each index row i
 with the supplement row that has the same ``VOLUME_ID`` and ``FILE_SPECIFICATION_NAME``.
 The host raises :exc:`~oops.host.HostIndexError` if an image appears in only one of the
 tables, or if, when the orders differ, either table lists an image twice. The error
-names the first few such images and both tables.
+lists the first few such images and both tables.
 
 Other arguments
 ===============
@@ -62,7 +70,9 @@ Other arguments
 ``filter``
     A dictionary of column names and the values to keep. A row is kept when each column
     equals its value, is one of a set of values, or falls in a range given as a tuple of
-    two values.
+    two values. A column that no row has raises :exc:`~oops.OopsValueError`, and a
+    range that cannot be compared with a column's values raises
+    :exc:`~oops.OopsTypeError`, both at once.
 
 ``select``
     Must be None. Each row is one image, so there is nothing to select, and any other
@@ -83,18 +93,29 @@ subfield holds the merged row, with the same treatment of missing values as a la
 :doc:`user_guide_metadata`). The placeholders that the tables write for a value an image
 does not have are left out: the supplement's ``CUT_OUT_WINDOW`` and ``TRUTH_WINDOW`` of
 -1, -1, -1, -1, its ``ICT_DESPIKE_THRESHOLD`` and ``ICT_QUANTIZATION_STEP_SIZE`` of -1,
-a compression ratio of 0, and the ``ORBIT_NUMBER`` of -99 that the index gives an image
-taken before the Jupiter tour. An exposure of 0 is a real value and is kept.
+a compression ratio of 0, the ``SMEAR_MAGNITUDE`` of 0.1 that the index gives every
+image of the Jupiter tour, and the ``ORBIT_NUMBER`` of -99 that the index gives an image
+taken before the tour. An exposure of 0 is a real value and is kept.
+
+The indexes of GO_0017 through GO_0023, the only ones that give compression ratios,
+write each image's three ratios in the wrong columns. The value in
+``ENCODING_COMPRESSION_RATIO`` is the image's maximum ratio, the value in
+``ENCODING_MIN_COMPRESSION_RATIO`` is its ratio, and the value in
+``ENCODING_MAX_COMPRESSION_RATIO`` is its minimum. For example, the product label of
+``GO_0021/C21/IO/C0506406074R`` gives a ratio of 3.758, a minimum of 3.03, and a maximum
+of 5.428, while the index gives 5.428, 3.758, and 3.03. The host gives each value under
+the name of the ratio it is, as the product label does.
 
 The subfields are those of an image read from its label (see
 :doc:`user_guide_metadata`), except ``data``, ``label_dict``, and ``header_dict``. The
 telemetry format comes from the supplement, so a row passed in ``row_dicts`` without the
 supplement's columns gets the full field of view.
 
-Every row gives a Snapshot, including a row whose exposure is zero. The host does not
-check the C kernels for the pointing of an index row. If the kernels hold no pointing
-for an image, its row still gives a Snapshot, and the error appears only when the
-Snapshot's frame is evaluated.
+Every row gives a Snapshot, including a row whose exposure is zero. Building a row's
+Snapshot raises no error about pointing. If the C kernels hold no pointing for an image,
+its Snapshot's frame raises :exc:`oops.OopsSpiceError` whenever it is evaluated, with
+the same message that :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file` gives (see
+:doc:`user_guide_errors`).
 
 File paths
 ==========
@@ -104,19 +125,21 @@ refers to the image file, with ``.IMG`` in place of ``.LBL`` in the same case.
 ``filepath``, ``basename``, and ``image_url`` give it as a full path or URL, formed from
 the location of the index:
 
-- For an index in a volume's ``INDEX`` directory, the volume directories are those
-  beside the volume that holds it.
 - For an index in the ``metadata`` tree of the Ring-Moon Systems Node holdings, such as
-  ``.../metadata/GO_0xxx/GO_0017/GO_0017_index.lbl``, they are in the matching
-  ``volumes`` tree, ``.../volumes/GO_0xxx``.
+  ``.../metadata/GO_0xxx/GO_0017/GO_0017_index.lbl``, the volume directories are in the
+  matching ``volumes`` tree, ``.../volumes/GO_0xxx``.
 - For an index anywhere else, they are in the index's own directory.
 
 The row's ``VOLUME_ID`` and file specification complete the path. ``abspath`` is present
-only when the image file is local or already in the local cache.
+only when the image file is local or already in the local cache. Reading an index never
+creates a directory, even when the volumes are not there.
 
 Reading an index through oops.Host
 ==================================
 
 :meth:`oops.host.Host.from_index` recognizes an SSI index from its label and passes it,
-with its other arguments, to :meth:`~host_galileo.oops.ssi.GalileoSSI.from_index`, so
-the two give the same Snapshots.
+with every other argument, to :meth:`~host_galileo.oops.ssi.GalileoSSI.from_index`,
+which reads and pairs the two tables itself. The two give the same Snapshots. A
+volume's own index does not identify its instrument in its label, so
+:meth:`oops.host.Host.from_index` recognizes it from its first row and passes it to the
+host, which raises :exc:`~oops.host.HostIndexError` as described above.

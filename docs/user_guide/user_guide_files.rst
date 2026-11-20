@@ -51,9 +51,11 @@ the label spells it.
 A path that ends in ``.lbl``, in any case, is read as a PDS3 label.
 
 The ``filepath``, ``basename``, ``abspath``, and ``image_url`` subfields always give the
-image file, also when the input is the label. After an astrometry read of a remote
-label, the image file has not been retrieved, so ``abspath`` is absent unless an earlier
-read put the file in the local cache.
+image file, also when the input is the label. ``abspath`` is the image file's path on
+the local disk, so it is present only when the file is local or is already in the local
+cache of a remote file. After an astrometry read of a remote label, the image file has
+not been retrieved, so ``abspath`` is absent unless an earlier read put the file in the
+cache. Opening an image never creates a directory.
 
 Parsed input
 ============
@@ -61,6 +63,19 @@ Parsed input
 A label or image that has already been parsed can be passed in its place: a
 :class:`~pdsparser.Pds3Label` is read as a PDS3 label, and a :class:`~vicar.VicarLabel`
 or :class:`~vicar.VicarImage` as the image file.
+
+Parsed content that was read from text, rather than from a file, has no file path. Its
+Snapshot has no ``filepath``, ``basename``, ``abspath``, or ``image_url`` subfield. An
+astrometry read of it works as usual, and so does a normal read of a
+:class:`~vicar.VicarImage`, which already holds its array. A normal read of a
+:class:`~pdsparser.Pds3Label` or :class:`~vicar.VicarLabel` needs the image file, so it
+raises :exc:`~oops.host.HostFormatError`, whose message says that no file path is
+known.
+
+The ``header_dict`` subfield holds the VICAR header as the file writes it. A
+:class:`~vicar.VicarImage` sets its ``HOST`` to the machine that read it, so when a
+:class:`~vicar.VicarImage` that has a file path is passed in, the host reads the header
+again from that file.
 
 Options
 =======
@@ -83,8 +98,23 @@ These options are particular to the Galileo host:
 ``astrometry``
     True for an astrometry read, as described above.
 
+``select``
+    Must be None. An SSI image is one observation, so there is nothing to select, and
+    any other value raises :exc:`~oops.OopsValueError`.
+
 The standard OOPS overrides, ``target``, ``lightsource``, ``path``, ``frame``,
 ``cadence``, ``fov``, ``calibrations``, ``timeshift``, ``navigation``, ``tracker``, and
 ``parallel``, replace what the host would otherwise build. They are listed with
-:meth:`~host_galileo.oops.ssi.GalileoSSI.from_file`. Any other keyword is accepted and
-ignored.
+:meth:`~host_galileo.oops.ssi.GalileoSSI.from_file`. Any other keyword raises
+:exc:`~oops.OopsTypeError`, so that a misspelled argument is not silently ignored.
+
+Reading a label through oops.Host
+=================================
+
+:meth:`oops.host.Host.from_file` only identifies the host. It parses a PDS3 label with
+the parser's fast method, then the strict one, then the loose one, until one of them
+reads it, and it reads a VICAR file's header alone. It then passes the original path,
+with the caller's options and overrides, to
+:meth:`~host_galileo.oops.ssi.GalileoSSI.from_file`. Any SSI label or image file that
+the host reads directly therefore also reads through :meth:`oops.host.Host.from_file`,
+and the two give the same Snapshot.
