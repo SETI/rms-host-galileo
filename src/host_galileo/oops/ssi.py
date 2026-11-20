@@ -32,13 +32,6 @@ _TICK_TOLERANCE = 40
 # The NAIF ID of the SSI instrument, as used in its instrument kernel
 _NAIF_ID = -77036
 
-# The columns that identify the same image in an index and its supplement. Both tables
-# also give SPACECRAFT_CLOCK_START_COUNT, but the supplement writes it in the SPICE form
-# "RRRRRRRR:MM:S:T" and the index in the label form "RRRRRRRR.MM", so the default
-# validation of oops.Host._index_rows(), which compares every shared column, would reject
-# every real pair until the index is corrected (rms-data-projects #258, item 4).
-_INDEX_KEYS = ['VOLUME_ID', 'FILE_SPECIFICATION_NAME']
-
 # The telemetry format of an index row that gives none, as an index read without its
 # supplement does; its FOV is the full frame
 _INDEX_DEFAULT_MODE = 'NONE'
@@ -87,10 +80,6 @@ _ITEM_SUBFIELDS = [
     ('spacecraft_clock_start_count', 'SPACECRAFT_CLOCK_START_COUNT'),
 ]
 
-# The PDS3 label parsers to try, in order. The fast parser rejects some valid labels, such
-# as one whose quoted value starts on the line after its keyword.
-_PDS3_METHODS = ('fast', 'strict', 'loose')
-
 # Target name as found in PDS label -> correct name
 _TARGET_NAME_REPAIRS = {
     'BLACK_SKY'  : 'NONE',
@@ -108,6 +97,9 @@ _TARGET_STARS = re.compile(r'(HD 151288|PLEIADES|SIRIUS|[A-Z]{3}_[A-Z]{3})$')
 
 # What the C kernels could not supply, as the OopsSpiceError for missing pointing names it
 _NO_POINTING = 'no Galileo SSI pointing'
+
+# The columns of an SSI volume's own index table by which its label is recognized
+_VOLUME_INDEX_COLUMNS = ('MISSION_NAME', 'INSTRUMENT_ID', 'OBSTRUCTION_ID')
 
 
 class GalileoSSI(oops.Host):
@@ -155,11 +147,18 @@ class GalileoSSI(oops.Host):
         unset values (a numeric -999, a PICNO or SPICE_C_ID of "?", a TCA of "CLOSEST
         TIME", a SMEAR of 0.1, and time fields that are not a valid time) count as no
         value, as do the texts UNKNOWN, NOT APPLICABLE, "---", and an empty string. So
-        do the values that the archive's DATASET.CAT documents as not implemented or not
-        applicable: a CONE_ANGLE (CONE), SMEAR_AZIMUTH (SMRAZ), or CENTER_RING_RADIUS
-        (RAD) of 0, a SOLAR_DISTANCE (SOLRANGE) of 777909100 km, and a RIGHT_ASCENSION,
-        DECLINATION, and TWIST_ANGLE that are all 0, as they are when the C kernels had
-        no pointing. The time from closest approach, which the labels before the Jupiter
+        do the values that the archive's DATASET.CAT documents as not implemented, not
+        applicable, or not available: a CONE_ANGLE (CONE), SMEAR_AZIMUTH (SMRAZ),
+        CENTER_RING_RADIUS (RAD), CENTRAL_BODY_DISTANCE (PLRANGE), HORIZONTAL_PIXEL_SCALE
+        (HSCL), VERTICAL_PIXEL_SCALE (VSCL), or SLANT_DISTANCE (SLRANGE) of 0; a
+        SOLAR_DISTANCE (SOLRANGE) of 777909100 km; a time from closest approach that
+        begins with "-73T"; and each of these groups when every value of it that a label
+        gives is 0 and the label gives at least two: RIGHT_ASCENSION, DECLINATION, and
+        TWIST_ANGLE (RA, DEC, and TWIST), as they are when the C kernels had no pointing;
+        CENTER_LATITUDE and CENTER_LONGITUDE; INTERCEPT_POINT_LATITUDE and
+        INTERCEPT_POINT_LONGITUDE (LAT and LON); and NORTH_AZIMUTH, SUB_SOLAR_AZIMUTH, and
+        SUB_SPACECRAFT_AZIMUTH (NORAZ, SUNAZ, and SCAZ). One value of a group alone at 0
+        is kept. The time from closest approach, which the labels before the Jupiter
         tour call TIME_FROM_CLOSEST_APPROACH and SATELLITE_TIME_FROM_CLST_APR, is given
         under the tour labels' names, NTV_TIME_FROM_CLOSEST_APPROACH and
         NTV_SAT_TIME_FROM_CLOSEST_APRH, which the header's TCA also takes.
@@ -276,8 +275,10 @@ class GalileoSSI(oops.Host):
 
         Raises:
             oops.OopsSpiceError: If no `frame` is given and the C kernels lack the
-                pointing of the scan platform at the midtime of the exposure (after any
-                `cadence` override and any `timeshift` of the cadence), or if the time
+                pointing of the scan platform at the time at which the frame is evaluated
+                (the midtime of the exposure, or of the `cadence` override, plus the
+                seconds of a `timeshift` once if its letters include "T" and once more if
+                they include "F"), or if the time
                 must come from the spacecraft clock count and the clock kernel cannot
                 convert it. The message of the first is
                 "no Galileo SSI pointing at <time> for <image file>: <SPICE error code>",
@@ -321,7 +322,9 @@ class GalileoSSI(oops.Host):
         # Read the image file unless this is an astrometry read; never read the label
         # beside an image file. The header comes from a VicarLabel, never from a
         # VicarImage, which replaces the HOST and BHOST of the file with the reading
-        # machine's.
+        # machine's; a VicarImage passed in with a file path has its header read again
+        # from the file. This stays until rms-vicar keeps the header as the file writes
+        # it (SETI/rms-vicar#34).
         label_dict = None
         header = None
         data = None
@@ -381,8 +384,8 @@ class GalileoSSI(oops.Host):
 
         A PDS3 label that the requested parser rejects, whether for its syntax or for a
         value it cannot convert (such as a time with an hour of 25), is tried again with
-        each later parser of fast, strict, and loose. A VICAR file's header is read
-        without its array.
+        each later parser of fast, strict, and loose, as oops.Host._read_fileinfo() does
+        with `pds3_fallback`. A VICAR file's header is read without its array.
 
         Parameters:
             fileinfo (str | pathlib.Path | FCPath | Pds3Label | VicarLabel | VicarImage):
@@ -396,32 +399,16 @@ class GalileoSSI(oops.Host):
         Raises:
             oops.OopsValueError: If the requested method is none of fast, strict, and
                 loose and the parser rejects it or another option.
-            oops.host.PdsHostError: If no parser accepts the PDS3 label.
+            oops.host.PdsHostError: If no parser accepts the PDS3 label. The message
+                names the label and gives the error of each parser tried.
             oops.host.VicarHostError: If the VICAR header cannot be parsed.
             oops.host.WrongHostError: If the file or the parsed content is not that of a
                 Galileo SSI image.
             OSError: If the file cannot be read.
         """
 
-        def read(method):
-            return GalileoSSI._read_fileinfo(fileinfo, formats='PV', astrometry=True,
-                                             pds3_options=pds3_options
-                                             | {'method': method})
-
-        requested = pds3_options['method']
-        if requested in _PDS3_METHODS:
-            parsed = None
-            for method in _PDS3_METHODS[_PDS3_METHODS.index(requested):]:
-                try:
-                    parsed = read(method)
-                    break
-                except (oops.host.PdsHostError, oops.OopsValueError) as err:
-                    error = err
-            if parsed is None:
-                raise oops.host.PdsHostError(f'no PDS3 parser can read {fileinfo}: '
-                                             f'{error}') from error
-        else:
-            parsed = read(requested)
+        parsed = GalileoSSI._read_fileinfo(fileinfo, formats='PV', astrometry=True,
+                                           pds3_options=pds3_options, pds3_fallback=True)
 
         # A parsed label or image passed in has not been identified yet
         if isinstance(parsed, Pds3Label):
@@ -543,8 +530,9 @@ class GalileoSSI(oops.Host):
         then read as the iteration proceeds, a few at a time, and each row's Snapshot is
         built when the iteration reaches that row, so the memory used stays the same
         however long the index is. An error in a row is raised when the iteration
-        reaches it, after every earlier row has been yielded, and the iteration ends
-        there; `filter` can leave such a row out.
+        reaches it, after every earlier row has been yielded (except for a row longer
+        than its label says, as described below), and the iteration ends there;
+        `filter` can leave such a row out.
 
         Every SSI index lists its files in the same order as its supplement, so the two
         tables are read in step and each index row is paired with the supplement row in
@@ -636,16 +624,18 @@ class GalileoSSI(oops.Host):
             for an image that has no such value (the supplement's CUT_OUT_WINDOW and
             TRUTH_WINDOW of -1, -1, -1, -1, its ICT_DESPIKE_THRESHOLD and
             ICT_QUANTIZATION_STEP_SIZE of -1, a compression ratio of 0, and a
-            SMEAR_MAGNITUDE of 0.1), the values that the archive documents as not
-            implemented or not applicable (a SOLAR_DISTANCE of 777909100 km, and a
-            CONE_ANGLE, SMEAR_AZIMUTH, or CENTER_RING_RADIUS of 0), the RIGHT_ASCENSION,
-            DECLINATION, and TWIST_ANGLE when all three are 0, as they are when the C
-            kernels had no pointing, and the ORBIT_NUMBER of -99 that the index gives a
-            frame taken before the Jupiter tour. The tables' other null constants are
-            kept, because they also mark real values, such as an exposure of 0. Where
-            the index label names the three compression-ratio columns in the rotated
-            order of the current SSI indexes, the values are given under the names of
-            the ratios they hold, as the product labels give them. The DATA_SET_ID of an
+            SMEAR_MAGNITUDE of 0.1), the values that the archive documents as standing
+            for no value, by the same rules as for a label read by :meth:`from_file`
+            (such as a SOLAR_DISTANCE of 777909100 km, a HORIZONTAL_PIXEL_SCALE or
+            VERTICAL_PIXEL_SCALE of 0, a time from closest approach that begins with
+            "-73T", and a RIGHT_ASCENSION, DECLINATION, and TWIST_ANGLE that are all 0),
+            and the ORBIT_NUMBER of -99 that the index gives a frame taken before the
+            Jupiter tour. Three values that the tables declare as constants are kept,
+            because they are real: an EXPOSURE_DURATION of 0, an ON_CHIP_MOSAIC_FLAG of
+            N, and a PRODUCT_VERSION_ID of 0. Where the index label names the three
+            compression-ratio columns in the order of their bytes that every SSI index
+            label has used, the values are given under the names of the ratios they hold,
+            as the product labels give them. The DATA_SET_ID of an
             image of the Jupiter tour has the version 1.1 of the product labels, where
             the current indexes write 1.0. NTV_SAT_TIME_FROM_CLOSEST_APR is given under
             the labels' name, NTV_SAT_TIME_FROM_CLOSEST_APRH.
@@ -666,7 +656,9 @@ class GalileoSSI(oops.Host):
                 be compared with the row's value.
             oops.OopsValueError: At call time, if `select` is not None, if a value in
                 `pds3_options` is invalid, or if `filter` uses a column that neither
-                table has (with `row_dicts`, that the first row lacks).
+                table has. With `row_dicts`, `filter` is checked against the first row:
+                at call time if `row_dicts` is a sequence, and when the iteration reads
+                the first row if it is an iterator.
             oops.host.HostIndexError: At call time, if `filepath` is in a directory named
                 INDEX in either case, where a volume keeps its own index; if `supplement`
                 is None while `row_dicts` is not given; if `supplement` is
@@ -674,9 +666,15 @@ class GalileoSSI(oops.Host):
                 if either label does not describe a table that can be read; or if a
                 table lacks VOLUME_ID or FILE_SPECIFICATION_NAME. When the iteration
                 reaches a row, if the index row and the supplement row in the same
-                position give different files, if the supplement ends before the index,
-                or if the row does not match its label. After the last index row, if
-                the supplement has rows left over.
+                position give different files, or if the supplement ends before the
+                index; at the end of a table file that holds fewer rows than its label
+                says, after every row it holds; and at the first of the ten rows read
+                with a row longer than the label's row length, none of which is yielded.
+                After the last index row, if the supplement has rows left over or a
+                table file holds more rows than its label says. A value that cannot be
+                read as its column's number is given as a string, with a UserWarning
+                from the table reader, and the Snapshot of its row may then raise the
+                TypeError or ValueError of the value's use.
             oops.host.HostFormatError: When the iteration reaches a row that lacks the
                 exposure duration or a time (IMAGE_TIME, or the spacecraft clock count
                 and frame duration), or whose time must come from the spacecraft clock
@@ -709,19 +707,24 @@ class GalileoSSI(oops.Host):
 
         GalileoSSI.initialize()
 
+        # The index label decides, once for the whole table, whether the compression
+        # ratios are in rotated columns, so it is read also when the rows are given. It
+        # is parsed once, after a volume's own index is refused, and passed on.
+        label = GalileoSSI._read_index_label(index_path, label=label,
+                                             pds3_options=pds3_options)
+        rotated = _ssi_labels.ratios_rotated(label)
+
         # Read the index and the supplement as the iteration proceeds, a few rows at a
         # time, each index row paired with its supplement row and filtered. The call
-        # itself reads only the labels, after refusing a volume's own index.
+        # itself reads only the labels. Both tables also give
+        # SPACECRAFT_CLOCK_START_COUNT, but the supplement writes it in the SPICE form
+        # "RRRRRRRR:MM:S:T" and the index in the label form "RRRRRRRR.MM", so the default
+        # validation, which compares every shared column, would reject every real pair
+        # until the index is corrected (rms-data-projects #258, item 4); the pairing's
+        # comparison of VOLUME_ID and FILE_SPECIFICATION_NAME is the only check.
         rows = GalileoSSI._index_rows(index_path, supplement=supplement, label=label,
                                       row_dicts=row_dicts, pds3_options=pds3_options,
-                                      filter=filter, validate=_INDEX_KEYS)
-
-        # The index label decides, once for the whole table, whether the compression
-        # ratios are in rotated columns, so it is read also when the rows are given
-        if label is None:
-            label = oops.Host._parse_index_label(
-                index_path, oops.Host._pds3_options_with_defaults(pds3_options))
-        rotated = _ssi_labels.ratios_rotated(label)
+                                      filter=filter, validate=())
 
         overrides = {
             'target'      : target,
@@ -744,10 +747,10 @@ class GalileoSSI(oops.Host):
 
         def snapshots():
             for row_dict in rows:
-                filespec = str(row_dict['FILE_SPECIFICATION_NAME'])
-                (stem, _, suffix) = filespec.rpartition('.')
-                image = (volumes / str(row_dict['VOLUME_ID']).strip()
-                         / (stem + '.' + ('img' if suffix.islower() else 'IMG')))
+                label_path = oops.Host._index_file_path(volumes, row_dict)
+                (stem, _, suffix) = label_path.name.rpartition('.')
+                image = label_path.with_name(stem + '.'
+                                             + ('img' if suffix.islower() else 'IMG'))
                 yield GalileoSSI._make_snapshot(
                     _ssi_labels.row_items(row_dict, rotated_ratios=rotated),
                     filepath=image, data=None, full_fov=full_fov,
@@ -782,10 +785,10 @@ class GalileoSSI(oops.Host):
             default_mode (str, optional): The telemetry format to use if `dict_` gives
                 none; None to require one.
             check_pointing (bool, optional): True to require that the C kernels give the
-                scan platform's pointing at the midtime of the exposure, after any
-                `cadence` override and any `timeshift` of the cadence, unless a frame
-                override is given; False to give the Snapshot a frame that raises
-                oops.OopsSpiceError when it is evaluated if they do not.
+                scan platform's pointing at the time at which the frame is evaluated, as
+                described for :meth:`from_file`, unless a frame override is given; False
+                to give the Snapshot a frame that raises oops.OopsSpiceError when it is
+                evaluated if they do not.
 
         Returns:
             Snapshot: The observation, with the subfields listed for :meth:`from_file`.
@@ -876,19 +879,14 @@ class GalileoSSI(oops.Host):
             'calibrations': [],         # TBD
         }
 
-        # Check the pointing at the middle of the exposure the Snapshot will have, which a
-        # cadence override and a timeshift of the cadence ("T") can change. An index row
-        # without its pointing still gives a Snapshot, whose frame raises the error when
-        # it is used.
+        # Check the pointing at the time at which the Snapshot will evaluate its frame,
+        # which a cadence override and a timeshift of the cadence ("T") or of the frame
+        # ("F") can change. An index row without its pointing still gives a Snapshot,
+        # whose frame raises the error when it is used.
         if using_cks:
-            cadence = (params['cadence'] if overrides['cadence'] is None
-                       else overrides['cadence'])
-            timeshift = overrides['timeshift']
-            if timeshift is not None and 'T' in str(timeshift[1]).upper():
-                cadence = oops.cadence.TimeShift(timeshift[0], cadence)
             params['frame'] = oops.Host._check_spice_frame(
-                params['frame'], cadence.midtime, description=_NO_POINTING,
-                filepath=filepath, defer=not check_pointing)
+                params['frame'], oops.Host._pointing_time(params['cadence'], overrides),
+                description=_NO_POINTING, filepath=filepath, defer=not check_pointing)
 
         # Apply standard overrides, including the path subfields
         oops.Host._apply_overrides(params, filepath, **overrides)
@@ -984,14 +982,26 @@ class GalileoSSI(oops.Host):
         """True if the given index label refers to this host/instrument.
 
         The label of an RMS Node metadata index names the host and instrument at its top
-        level. A volume's own index label does not, so for that label this detector
-        returns None, and the host is judged from a row by :meth:`_detect_in_row`.
+        level. The label of an SSI volume's own index, IMGINDEX.LBL or CUMINDEX.LBL in its
+        INDEX directory, does not, but its table has the SSI columns MISSION_NAME,
+        INSTRUMENT_ID, and OBSTRUCTION_ID; for that label this detector returns True, so
+        that :meth:`from_index` refuses it before any row is read. For any other label
+        without the host's name it returns None, and the host is judged from a row by
+        :meth:`_detect_in_row`.
         """
 
         host = label.get('INSTRUMENT_HOST_NAME')
-        if host is None:
-            return None
-        return host.startswith('GALILEO') and label.get('INSTRUMENT_ID', '') == 'SSI'
+        if host is not None:
+            return host.startswith('GALILEO') and label.get('INSTRUMENT_ID', '') == 'SSI'
+
+        # The IMGINDEX.LBL and CUMINDEX.LBL of every volume from GO_0002 to GO_0023 lack
+        # INSTRUMENT_HOST_NAME and have these three columns; OBSTRUCTION_ID is an SSI
+        # item
+        for table in label.values():
+            if isinstance(table, dict) and all(isinstance(table.get(name), dict)
+                                               for name in _VOLUME_INDEX_COLUMNS):
+                return True
+        return None
 
     @staticmethod
     def _detect_in_row(row_dict):

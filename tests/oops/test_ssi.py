@@ -1183,10 +1183,12 @@ def test_from_file_checks_pointing_in_the_cadence_override(
     assert times == [101.]
 
 
-# A timeshift of the cadence moves the time at which the pointing is checked; a timeshift
-# of the frame alone leaves it
+# A timeshift of the cadence ("T") moves the time at which the frame is evaluated, and so
+# does one of the frame ("F"), by the same seconds again if both are given; one of the
+# path ("P") leaves it. The letters are read in either case.
 @pytest.mark.usefixtures('initialized_ssi')
-@pytest.mark.parametrize(('letters', 'time'), [('T', 106.), ('F', 101.)])
+@pytest.mark.parametrize(('letters', 'time'), [('T', 106.), ('t', 106.), ('F', 106.),
+                                               ('f', 106.), ('P', 101.), ('TF', 111.)])
 def test_from_file_checks_pointing_at_the_shifted_time(
         tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, letters: str,
         time: float) -> None:
@@ -1198,6 +1200,24 @@ def test_from_file_checks_pointing_at_the_shifted_time(
     GalileoSSI.from_file(write_vicar_image(tmp_path), astrometry=True, cadence=cadence,
                          timeshift=(5., letters))
     assert times == [time]
+
+
+# A timeshift of the frame alone makes the frame be evaluated later than the midtime, so
+# pointing that the C kernels hold at the midtime but not at the shifted time is missing
+@pytest.mark.usefixtures('initialized_ssi')
+def test_from_file_frame_timeshift_needs_pointing_at_the_shifted_time(
+        tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def pointing_until(time: float) -> None:
+        if time > 103.:
+            no_pointing()
+
+    GalileoSSI._define_camera_frame()
+    monkeypatch.setattr(oops.Frame.as_frame('GLL_SCAN_PLATFORM'), 'transform_at_time',
+                        pointing_until)
+    cadence = oops.cadence.SnapCadence(100., 2.)
+    with pytest.raises(oops.OopsSpiceError, match=r'SPICE\(CKINSUFFDATA\)$'):
+        GalileoSSI.from_file(write_vicar_image(tmp_path), astrometry=True,
+                             cadence=cadence, timeshift=(5., 'F'))
 
 
 @pytest.mark.usefixtures('initialized_ssi')
@@ -1274,7 +1294,8 @@ def test_from_file_passes_another_parser_on(tmp_path: pathlib.Path) -> None:
 def test_from_file_rejects_a_label_no_parser_reads(tmp_path: pathlib.Path) -> None:
     path = write_pds3_image(tmp_path, extra_lines=('OBJECT = TABLE',))
     with pytest.raises(oops.host.PdsHostError,
-                       match=r'no PDS3 parser can read .*C0349632100R\.LBL'):
+                       match=r'^cannot parse the PDS3 label .*C0349632100R\.LBL: method '
+                             r'fast: .*; method strict: .*; method loose: '):
         GalileoSSI.from_file(path, astrometry=True)
 
 
@@ -1687,7 +1708,8 @@ def test_from_index_names_the_image_in_full(tmp_path: pathlib.Path) -> None:
                                                           image.resolve())
 
 
-# An index read fetches no image, so a remote image has abspath only if it is cached
+# An index read leaves the images where they are, so a remote image has abspath only if
+# it is already cached
 def test_from_index_remote_image_abspath_only_when_cached(tmp_path: pathlib.Path) -> None:
     local = write_index(tmp_path)
     put_in_cache(f'{_REMOTE}/C0349632100R.IMG', b'')
@@ -1722,14 +1744,17 @@ def test_from_index_finds_the_volumes_beside_the_metadata(tmp_path: pathlib.Path
                                   'C0346405900R.IMG')
 
 
-def write_volume_index(volume: pathlib.Path, directory: str = 'INDEX') -> pathlib.Path:
+def write_volume_index(volume: pathlib.Path, directory: str = 'INDEX', *,
+                       obstruction: bool = True) -> pathlib.Path:
     """Write the SSI index as a volume's own index, in its INDEX directory (or one named
-    `directory`), whose label does not name the instrument host; return the label's
+    `directory`), whose label does not name the instrument host, with the OBSTRUCTION_ID
+    column of an SSI volume's index unless `obstruction` is False; return the label's
     path."""
 
+    columns = _INDEX_COLUMNS + [('OBSTRUCTION_ID', 'CHARACTER', 4)] * obstruction
+    rows = [(*row, 'NONE') if obstruction else row for row in _INDEX_ROWS]
     (volume / directory).mkdir(parents=True)
-    return write_table(volume / directory, 'IMGINDEX', 'IMAGE_INDEX_TABLE',
-                       _INDEX_COLUMNS, _INDEX_ROWS)
+    return write_table(volume / directory, 'IMGINDEX', 'IMAGE_INDEX_TABLE', columns, rows)
 
 
 _VOLUME_INDEX_ERROR = (r'Galileo SSI reads the Ring-Moon Systems Node metadata index, '
@@ -1748,10 +1773,44 @@ def test_from_index_refuses_a_volumes_own_index(tmp_path: pathlib.Path, director
         GalileoSSI.from_index(index, row_dicts=rows)
 
 
+# A label without the host's name or the SSI columns leaves the host to the first row
 def test_host_from_index_refuses_a_volumes_own_index(tmp_path: pathlib.Path) -> None:
-    index = write_volume_index(tmp_path / 'GO_0017')
+    index = write_volume_index(tmp_path / 'GO_0017', obstruction=False)
     with pytest.raises(oops.host.HostIndexError, match=_VOLUME_INDEX_ERROR):
         oops.Host.from_index(index)
+
+
+# The label of an SSI volume's own index identifies the host, so the refusal comes before
+# any row is read, here from a table file that does not exist
+def test_host_from_index_refuses_a_volumes_own_index_from_its_label(
+        tmp_path: pathlib.Path) -> None:
+    index = write_volume_index(tmp_path / 'GO_0017')
+    (index.parent / 'IMGINDEX.tab').unlink()
+    with pytest.raises(oops.host.HostIndexError, match=_VOLUME_INDEX_ERROR):
+        oops.Host.from_index(index)
+
+
+@pytest.mark.parametrize(('obstruction', 'detected'), [(True, True), (False, None)])
+def test_detect_in_index_recognizes_a_volumes_own_index(tmp_path: pathlib.Path,
+                                                        obstruction: bool,
+                                                        detected: bool | None) -> None:
+    label = Pds3Label(write_volume_index(tmp_path / 'GO_0017', obstruction=obstruction))
+    assert GalileoSSI._detect_in_index(label) is detected
+
+
+def test_from_index_parses_the_index_label_once(tmp_path: pathlib.Path,
+                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    index = write_volume(tmp_path)
+    parsed: list[FCPath] = []
+    parse = oops.Host._parse_index_label
+
+    def spy(filepath: Any, *args: Any, **kwargs: Any) -> Any:
+        parsed.append(FCPath(filepath))
+        return parse(filepath, *args, **kwargs)
+
+    monkeypatch.setattr(oops.Host, '_parse_index_label', spy)
+    GalileoSSI.from_index(index)
+    assert parsed.count(FCPath(index)) == 1
 
 
 def test_from_index_requires_the_supplement_beside_it(tmp_path: pathlib.Path) -> None:
