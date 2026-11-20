@@ -264,7 +264,11 @@ def test_detect_in_vicar(label: dict[str, str], expected: bool) -> None:
     ({'INSTRUMENT_HOST_NAME': 'GALILEO', 'INSTRUMENT_ID': 'NIMS'}, False),
     ({'INSTRUMENT_HOST_NAME': 'CASSINI ORBITER', 'INSTRUMENT_ID': 'SSI'}, False),
     ({'IMAGE_INDEX_TABLE': {'ROWS': 1}}, None),
-], ids=['ssi', 'other-instrument', 'other-host', 'unnamed'])
+    # A volume's own index needs all three of its SSI columns
+    ({'IMAGE_INDEX_TABLE': {'INSTRUMENT_ID': {}, 'OBSTRUCTION_ID': {}}}, None),
+    ({'IMAGE_INDEX_TABLE': {'MISSION_NAME': {}, 'OBSTRUCTION_ID': {}}}, None),
+], ids=['ssi', 'other-instrument', 'other-host', 'unnamed', 'no-mission-name',
+        'no-instrument-id'])
 def test_detect_in_index(label: dict[str, Any], expected: bool | None) -> None:
     assert GalileoSSI._detect_in_index(label) is expected
 

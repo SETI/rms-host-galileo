@@ -172,8 +172,10 @@ def test_label_items_unknown_time_from_closest_approach_is_no_value(key: str) ->
     assert _ssi_labels.label_items({key: '-73T69:12:71Z'}) == {}
 
 
-def test_label_items_keep_a_negative_time_from_closest_approach() -> None:
-    label = {'NTV_TIME_FROM_CLOSEST_APPROACH': '-073T01:09:57Z'}
+# A real time has three digits of days, which can begin with "-73" or "-7"
+@pytest.mark.parametrize('time', ['-073T01:09:57Z', '-731T01:09:57Z'])
+def test_label_items_keep_a_negative_time_from_closest_approach(time: str) -> None:
+    label = {'NTV_TIME_FROM_CLOSEST_APPROACH': time}
     assert _ssi_labels.label_items(label) == label
 
 
