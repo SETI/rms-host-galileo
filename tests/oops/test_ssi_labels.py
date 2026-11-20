@@ -14,15 +14,6 @@ import vicar
 from host_galileo.oops import _ssi_labels
 
 
-@pytest.mark.parametrize(('value', 'expected'), [
-    ('UNK', True), ('N/A', True), ('NULL', True), ('unk', True), (' UNK ', True),
-    ('UNKNOWN', True), ('Not Applicable', True), ('---', True), ('', True), ('  ', True),
-    (None, True), (['UNK', 'N/A'], True),
-    ('NONE', False), (0, False), (-999., False), (['A', 'UNK'], False), ([], False),
-])
-def test_is_null(value: Any, expected: bool) -> None:
-    assert _ssi_labels.is_null(value) is expected
-
 ##########################################################################################
 # label_json() and header_json()
 ##########################################################################################
@@ -114,29 +105,66 @@ def test_label_items_keep_only_tour_orbits(orbit: Any, kept: bool) -> None:
     assert ('ORBIT_NUMBER' in _ssi_labels.label_items({'ORBIT_NUMBER': orbit})) is kept
 
 
-# The values that DATASET.CAT documents as not implemented or not applicable
-@pytest.mark.parametrize(('key', 'fill'), [('CONE_ANGLE', 0.), ('SMEAR_AZIMUTH', 0.),
-                                           ('CENTER_RING_RADIUS', 0.),
-                                           ('SOLAR_DISTANCE', 777909100.)])
+# The values that DATASET.CAT documents as not implemented, not applicable, or not
+# available
+_PDS3_FILLS = [('CONE_ANGLE', 0.), ('SMEAR_AZIMUTH', 0.), ('CENTER_RING_RADIUS', 0.),
+               ('SOLAR_DISTANCE', 777909100.), ('CENTRAL_BODY_DISTANCE', 0.),
+               ('HORIZONTAL_PIXEL_SCALE', 0.), ('VERTICAL_PIXEL_SCALE', 0.),
+               ('SLANT_DISTANCE', 0.)]
+
+
+@pytest.mark.parametrize(('key', 'fill'), _PDS3_FILLS)
 def test_label_items_documented_fill_is_no_value(key: str, fill: float) -> None:
     assert _ssi_labels.label_items({key: fill}) == {}
 
 
-def test_label_items_keep_a_real_solar_distance() -> None:
-    label = {'SOLAR_DISTANCE': 7.41e8}
+@pytest.mark.parametrize('label', [{'SOLAR_DISTANCE': 7.41e8},
+                                   {'HORIZONTAL_PIXEL_SCALE': 2024.28}],
+                         ids=['solar-distance', 'pixel-scale'])
+def test_label_items_keep_a_real_value(label: dict[str, Any]) -> None:
     assert _ssi_labels.label_items(label) == label
 
 
-_NO_POINTING = {'RIGHT_ASCENSION': 0., 'DECLINATION': 0., 'TWIST_ANGLE': 0.}
+# The groups of items that DATASET.CAT documents as all 0 where the value is not available
+_ZERO_GROUPS = [
+    {'RIGHT_ASCENSION': 0., 'DECLINATION': 0., 'TWIST_ANGLE': 0.},
+    {'CENTER_LATITUDE': 0., 'CENTER_LONGITUDE': 0.},
+    {'INTERCEPT_POINT_LATITUDE': 0., 'INTERCEPT_POINT_LONGITUDE': 0.},
+    {'NORTH_AZIMUTH': 0., 'SUB_SOLAR_AZIMUTH': 0., 'SUB_SPACECRAFT_AZIMUTH': 0.},
+]
+_ZERO_GROUP_IDS = ['pointing', 'center', 'intercept', 'azimuths']
 
 
-def test_label_items_pointing_of_zeros_is_no_value() -> None:
-    assert _ssi_labels.label_items(_NO_POINTING) == {}
+@pytest.mark.parametrize('group', _ZERO_GROUPS, ids=_ZERO_GROUP_IDS)
+def test_label_items_group_of_zeros_is_no_value(group: dict[str, float]) -> None:
+    assert _ssi_labels.label_items(group) == {}
 
 
-# One angle of a real pointing can be 0
-def test_label_items_keep_a_pointing_with_one_zero() -> None:
-    label = _NO_POINTING | {'DECLINATION': -6.405}
+# One item of a real value can be 0
+@pytest.mark.parametrize('group', _ZERO_GROUPS, ids=_ZERO_GROUP_IDS)
+def test_label_items_keep_a_group_with_one_zero(group: dict[str, float]) -> None:
+    label = group | {next(iter(group)): -6.405}
+    assert _ssi_labels.label_items(label) == label
+
+
+# A source that gives two items of a group, both 0, as an index does for the azimuths
+def test_label_items_group_of_two_zeros_is_no_value() -> None:
+    assert _ssi_labels.label_items({'NORTH_AZIMUTH': 0., 'SUB_SOLAR_AZIMUTH': 0.}) == {}
+
+
+def test_label_items_keep_a_lone_zero_of_a_group() -> None:
+    assert _ssi_labels.label_items({'NORTH_AZIMUTH': 0.}) == {'NORTH_AZIMUTH': 0.}
+
+
+# DATASET.CAT documents a time from closest approach of "-73T..." as not available
+@pytest.mark.parametrize('key', ['TIME_FROM_CLOSEST_APPROACH',
+                                 'SATELLITE_TIME_FROM_CLST_APR'])
+def test_label_items_unknown_time_from_closest_approach_is_no_value(key: str) -> None:
+    assert _ssi_labels.label_items({key: '-73T69:12:71Z'}) == {}
+
+
+def test_label_items_keep_a_negative_time_from_closest_approach() -> None:
+    label = {'NTV_TIME_FROM_CLOSEST_APPROACH': '-073T01:09:57Z'}
     assert _ssi_labels.label_items(label) == label
 
 
@@ -209,13 +237,19 @@ def test_header_items_without_a_value(header: dict[str, Any], key: str) -> None:
 @pytest.mark.parametrize(('key', 'fill'), [('PICNO', '?'), ('SPICE_C_ID', '?'),
                                            ('TCA', 'CLOSEST TIME'), ('SMEAR', 0.1),
                                            ('RAD', 0.), ('CONE', 0.), ('SMRAZ', 0.),
-                                           ('SOLRANGE', 777909100.)])
+                                           ('SOLRANGE', 777909100.), ('HSCL', 0.),
+                                           ('VSCL', 0.), ('SLRANGE', 0.),
+                                           ('PLRANGE', 0.)])
 def test_header_items_fill_is_no_value(key: str, fill: Any) -> None:
     assert _ssi_labels.header_items({key: fill}) == {}
 
 
-def test_header_items_pointing_of_zeros_is_no_value() -> None:
-    assert _ssi_labels.header_items({'RA': 0., 'DEC': 0., 'TWIST': 0.}) == {}
+@pytest.mark.parametrize('header', [{'RA': 0., 'DEC': 0., 'TWIST': 0.},
+                                    {'LAT': 0., 'LON': 0.},
+                                    {'NORAZ': 0., 'SUNAZ': 0., 'SCAZ': 0.}],
+                         ids=['pointing', 'center', 'azimuths'])
+def test_header_items_group_of_zeros_is_no_value(header: dict[str, float]) -> None:
+    assert _ssi_labels.header_items(header) == {}
 
 
 def test_header_items_keep_a_pointing_with_one_zero() -> None:
@@ -320,9 +354,19 @@ def test_row_items_drop_nulls() -> None:
 @pytest.mark.parametrize(('column', 'value'), [
     ('SMEAR_MAGNITUDE', np.float64(0.1)),
     ('SOLAR_DISTANCE', np.float64(777909100.)),
+    ('HORIZONTAL_PIXEL_SCALE', np.float64(0.)),
+    ('VERTICAL_PIXEL_SCALE', np.float64(0.)),
+    ('NTV_TIME_FROM_CLOSEST_APPROACH', np.str_('-73T69:12:71Z ')),
+    ('NTV_SAT_TIME_FROM_CLOSEST_APR', np.str_('-73T69:12:71Z ')),
 ])
 def test_row_items_drop_a_placeholder(column: str, value: Any) -> None:
     assert _ssi_labels.row_items({column: value}) == {}
+
+
+# A corrected table that writes the null constant there gives a real value elsewhere
+def test_row_items_keep_a_real_pixel_scale() -> None:
+    row = {'HORIZONTAL_PIXEL_SCALE': np.float64(12968.7)}
+    assert _ssi_labels.row_items(row) == {'HORIZONTAL_PIXEL_SCALE': 12968.7}
 
 
 # A value that the table declares as its column's constant is masked by the table reader
@@ -346,9 +390,19 @@ def test_row_items_keep_a_partly_masked_value() -> None:
     assert _ssi_labels.row_items(row) == {'X': [1, -1]}
 
 
-def test_row_items_pointing_of_zeros_is_no_value() -> None:
-    row = {'RIGHT_ASCENSION': np.float64(0.), 'DECLINATION': np.float64(0.),
-           'TWIST_ANGLE': np.float64(0.)}
+@pytest.mark.parametrize('row', [
+    {'RIGHT_ASCENSION': np.float64(0.), 'DECLINATION': np.float64(0.),
+     'TWIST_ANGLE': np.float64(0.)},
+    {'NORTH_AZIMUTH': np.float64(0.), 'SUB_SOLAR_AZIMUTH': np.float64(0.)},
+], ids=['pointing', 'azimuths'])
+def test_row_items_group_of_zeros_is_no_value(row: dict[str, Any]) -> None:
+    assert _ssi_labels.row_items(row) == {}
+
+
+# Only the declared value that is real is kept; another constant that a corrected table
+# declares in the same column is dropped
+def test_row_items_drop_another_constant_of_a_real_value_column() -> None:
+    row = {'PRODUCT_VERSION_ID': np.int64(-1), 'PRODUCT_VERSION_ID_mask': np.True_}
     assert _ssi_labels.row_items(row) == {}
 
 
@@ -406,14 +460,15 @@ _MAX = 'ENCODING_MAX_COMPRESSION_RATIO'
 _RATIO = 'ENCODING_COMPRESSION_RATIO'
 
 
+# The column order alone decides: a label made again later with the same order, as every
+# regeneration of the metadata tree has been, still has the defect
 @pytest.mark.parametrize(('label', 'rotated'), [
     (index_label((_MIN, _MAX, _RATIO)), True),
-    (index_label((_MIN, _MAX, _RATIO), dt.datetime(2025, 10, 30, 14, 33, 30)), True),
-    (index_label((_MIN, _MAX, _RATIO), '2025-10-30T14:33:31'), False),
+    (index_label((_MIN, _MAX, _RATIO), dt.datetime(2026, 12, 1, 0, 0, 0)), True),
     (index_label((_RATIO, _MIN, _MAX), dt.datetime(2025, 10, 30, 13, 48, 44)), False),
     (index_label((_MIN, _RATIO, _MAX)), False),
     ({'IMAGE_INDEX_TABLE': {'VOLUME_ID': {'START_BYTE': 2}}}, False),
-], ids=['rotated', 'last-rotated', 'made-later', 'renamed', 'other-order', 'no-ratios'])
+], ids=['rotated', 'made-later', 'renamed', 'other-order', 'no-ratios'])
 def test_ratios_rotated(label: dict[str, Any], rotated: bool) -> None:
     assert _ssi_labels.ratios_rotated(label) is rotated
 

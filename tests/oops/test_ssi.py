@@ -1880,12 +1880,13 @@ _ROTATED = ('ENCODING_MIN_COMPRESSION_RATIO', 'ENCODING_MAX_COMPRESSION_RATIO',
 
 
 # The current indexes, whose labels name the ratio columns in the rotated order, give each
-# value under the name of the ratio it holds; an index corrected by renaming the columns,
-# or made again with the values moved, keeps the names it gives
+# value under the name of the ratio it holds, also when the label is made again with a
+# later creation time, as every earlier regeneration was; an index corrected by renaming
+# the columns keeps the names it gives
 @pytest.mark.parametrize(('order', 'created', 'ratios'), [
     (_ROTATED, '2025-10-30T13:48:44', (1.5, 2.5, 3.5)),
     (_RATIOS, '2025-10-30T13:48:44', (1.5, 2.5, 3.5)),
-    (_ROTATED, '2026-12-01T00:00:00', (3.5, 1.5, 2.5)),
+    (_ROTATED, '2026-12-01T00:00:00', (1.5, 2.5, 3.5)),
 ], ids=['rotated', 'renamed', 'made-again'])
 def test_from_index_ratio_columns(tmp_path: pathlib.Path, order: tuple[str, ...],
                                   created: str, ratios: tuple[float, ...]) -> None:
