@@ -151,15 +151,14 @@ _INDEX_PLACEHOLDERS = {'SMEAR_MAGNITUDE': 0.1}
 # rotated columns, and the ratio each holds. Every current SSI index label names the
 # three columns, in the order of their bytes in the row, ENCODING_MIN_COMPRESSION_RATIO,
 # ENCODING_MAX_COMPRESSION_RATIO, and ENCODING_COMPRESSION_RATIO, but the values in them
-# are each image's ratio, minimum, and maximum, the order in which each volume's own
-# INDEX/IMGINDEX.LBL names its columns. So the index gives each image's maximum under
-# ENCODING_COMPRESSION_RATIO, its ratio under the minimum's name, and its minimum under
-# the maximum's name: in all 2,935 rows with a nonzero ratio (GO_0017-GO_0023 and the
-# cumulative GO_0999), the three values are the product label's in that rotated order, as
-# in GO_0021/C21/IO/C0506406074R (index 5.428, 3.758, 3.03; label 3.758, 3.03, 5.428).
-# Until the index is corrected (rms-data-projects #258, item 8), the host gives each value
-# under the name of the ratio it holds, in a table whose label shows the defect
-# (ratios_rotated).
+# are each image's ratio, minimum, and maximum. So the index gives each image's maximum
+# under ENCODING_COMPRESSION_RATIO, its ratio under the minimum's name, and its minimum
+# under the maximum's name: in all 2,935 rows with a nonzero ratio (GO_0017-GO_0023 and
+# the cumulative GO_0999), the three values are the product label's in that rotated
+# order, as in GO_0021/C21/IO/C0506406074R (index 5.428, 3.758, 3.03; label 3.758, 3.03,
+# 5.428). Until the index is corrected (rms-data-projects #258, item 8), the host gives
+# each value under the name of the ratio it holds, in a table whose label shows the
+# defect (ratios_rotated).
 _INDEX_RATIO_COLUMNS = {
     'ENCODING_COMPRESSION_RATIO'    : 'ENCODING_MAX_COMPRESSION_RATIO',
     'ENCODING_MIN_COMPRESSION_RATIO': 'ENCODING_COMPRESSION_RATIO',
@@ -188,7 +187,7 @@ _INDEX_NAMES = {'NTV_SAT_TIME_FROM_CLOSEST_APR': 'NTV_SAT_TIME_FROM_CLOSEST_APRH
 
 # The index values that the product labels give differently, and the labels' value. The
 # indexes give all 3,993 images of the Jupiter tour data set version 1.0, where every
-# product label and every volume's own index give version 1.1. Until the index is
+# product label gives version 1.1. Until the index is
 # corrected (rms-data-projects #258, item 9), the host gives the labels' version; a
 # corrected row already gives it.
 _INDEX_VALUE_REPAIRS = {

@@ -196,10 +196,8 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   only reader of tables. `MERGE_SUPPLEMENT_BY_FILE = False`: every SSI metadata index lists
   its files in its supplement's order (a survey of all 23, 29,324 rows), so the rows are
   paired by position, and a row whose files differ raises `HostIndexError` at that row.
-  `METADATA_INDEX_EXAMPLE` makes `_index_rows()` refuse a volume's own index (a file in
-  a directory named `INDEX` in either case) before anything is read, also with
-  `row_dicts`: it has no supplement, and its file specifications start with the volume
-  ID and name the image. The supplement writes `SPACECRAFT_CLOCK_START_COUNT` in SPICE
+  The host reads the Ring-Moon Systems Node metadata indexes and their supplements. The
+  supplement writes `SPACECRAFT_CLOCK_START_COUNT` in SPICE
   form and the index in label form, so the default validation, which compares every
   shared column, would reject every real pair until the index is corrected;
   `validate=()` leaves the pairing's comparison of `VOLUME_ID` and
@@ -208,7 +206,7 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   and it must exist (`FileNotFoundError`); `supplement=None` raises `HostIndexError`
   unless `row_dicts` is given. Index values win the merge, so the clock count stays in
   label form. The index label is read once, by `oops.Host._read_index_label()` (which
-  refuses a volume's own index first, and returns `label` if given), for
+  returns `label` if given), for
   `ratios_rotated()`, also with `row_dicts`, so the label must exist then; it is passed
   to `_index_rows()` as `label`. A row's `FILE_SPECIFICATION_NAME` names the label; the
   Snapshot's `filepath` names the image beside it, with `.IMG` (or `.img`) in place of
@@ -217,14 +215,8 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   Node metadata tree, else the index's directory), and `oops.Host._index_file_path()`
   joins the row's `VOLUME_ID` and file specification to it (design D5).
   `_detect_in_index()` decides from the label's `INSTRUMENT_HOST_NAME` and
-  `INSTRUMENT_ID`; for a label without them it returns True if a table has the
-  `MISSION_NAME`, `INSTRUMENT_ID`, and `OBSTRUCTION_ID` columns of an SSI volume's own
-  index (`IMGINDEX.LBL`, `CUMINDEX.LBL`), so `oops.Host.from_index()` passes that index
-  to the class, which refuses it before any row is read, and None otherwise, so that the
-  host is identified from the first row. For such a label in a directory named `INDEX`,
-  `oops.Host.from_index()` drops the hosts that set `METADATA_INDEX_EXAMPLE` before
-  reading a row and, with no other host left, raises its own host-neutral
-  `HostIndexError`. A table value that `PdsTable` cannot read as
+  `INSTRUMENT_ID`; for a label without them it returns None, so that the host is
+  identified from the first row. A table value that `PdsTable` cannot read as
   its column's number is yielded as a string with a UserWarning, not an error of the
   table; the docs say what oops does with malformed rows rather than promising a check.
 - `GalileoSSI.from_index()` returns an iterator. It checks its arguments and reads the

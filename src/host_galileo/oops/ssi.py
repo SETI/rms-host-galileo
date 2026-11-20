@@ -98,9 +98,6 @@ _TARGET_STARS = re.compile(r'(HD 151288|PLEIADES|SIRIUS|[A-Z]{3}_[A-Z]{3})$')
 # What the C kernels could not supply, as the OopsSpiceError for missing pointing names it
 _NO_POINTING = 'no Galileo SSI pointing'
 
-# The columns of an SSI volume's own index table by which its label is recognized
-_VOLUME_INDEX_COLUMNS = ('MISSION_NAME', 'INSTRUMENT_ID', 'OBSTRUCTION_ID')
-
 
 class GalileoSSI(oops.Host):
     """The Galileo SSI host: Snapshot constructors for Solid State Imaging images."""
@@ -112,12 +109,6 @@ class GalileoSSI(oops.Host):
     # cumulative GO_0999, 29,324 rows), reading VOLUME_ID and FILE_SPECIFICATION_NAME from
     # both tables, found the same files in the same order in every one, none listed twice.
     MERGE_SUPPLEMENT_BY_FILE = False
-
-    # The host reads the Ring-Moon Systems Node metadata index, which carries the
-    # supplement that gives each image's telemetry format and window. A volume's own
-    # index, in its INDEX directory, has no supplement, and its FILE_SPECIFICATION_NAME
-    # begins with the volume ID and names the image file rather than the label.
-    METADATA_INDEX_EXAMPLE = 'GO_0017_index.lbl'
 
     _INSTRUMENT_KERNEL = None
     _FOVS = {}
@@ -528,7 +519,8 @@ class GalileoSSI(oops.Host):
                    **kwargs):
         """An iterator over Snapshots, one for each row of a Galileo SSI index file.
 
-        The call itself checks the arguments and reads the labels of the index and its
+        It reads a Ring-Moon Systems Node metadata index and its supplement. The call
+        itself checks the arguments and reads the labels of the index and its
         supplement, so that a wrong call fails at once. The rows of the two tables are
         then read as the iteration proceeds, a few at a time, and each row's Snapshot is
         built when the iteration reaches that row, so the memory used stays the same
@@ -545,8 +537,7 @@ class GalileoSSI(oops.Host):
         Parameters:
             filepath (str | pathlib.Path | FCPath): The full path to the PDS label of a
                 Galileo SSI index of the Ring-Moon Systems Node metadata tree, such as
-                ".../metadata/GO_0xxx/GO_0017/GO_0017_index.lbl". A volume's own index,
-                in its INDEX directory, is refused.
+                ".../metadata/GO_0xxx/GO_0017/GO_0017_index.lbl".
             supplement (str | pathlib.Path | FCPath | object, optional): The path to the
                 PDS label of the supplemental index file, whose columns are merged into
                 each row; an SSI index needs its supplement. Where both tables give a
@@ -663,12 +654,11 @@ class GalileoSSI(oops.Host):
                 table has. With `row_dicts`, `filter` is checked against the first row:
                 at call time if `row_dicts` is a sequence, and when the iteration reads
                 the first row if it is an iterator.
-            oops.host.HostIndexError: At call time, if `filepath` is in a directory named
-                INDEX in either case, where a volume keeps its own index; if `supplement`
-                is None while `row_dicts` is not given; if `supplement` is
-                `oops.Host.SUPPLEMENT` and the name of `filepath` contains no "_index";
-                if either label does not describe a table that can be read; or if a
-                table lacks VOLUME_ID or FILE_SPECIFICATION_NAME. When the iteration
+            oops.host.HostIndexError: At call time, if `supplement` is None while
+                `row_dicts` is not given; if `supplement` is `oops.Host.SUPPLEMENT` and
+                the name of `filepath` contains no "_index"; if either label does not
+                describe a table that can be read; or if a table lacks VOLUME_ID or
+                FILE_SPECIFICATION_NAME. When the iteration
                 reaches a row, if the index row and the supplement row in the same
                 position give different files, or if the supplement ends before the
                 index; at the end of a table file that holds fewer rows than its label
@@ -713,7 +703,7 @@ class GalileoSSI(oops.Host):
 
         # The index label decides, once for the whole table, whether the compression
         # ratios are in rotated columns, so it is read also when the rows are given. It
-        # is parsed once, after a volume's own index is refused, and passed on.
+        # is parsed once and passed on.
         label = GalileoSSI._read_index_label(index_path, label=label,
                                              pds3_options=pds3_options)
         rotated = _ssi_labels.ratios_rotated(label)
@@ -986,25 +976,13 @@ class GalileoSSI(oops.Host):
         """True if the given index label refers to this host/instrument.
 
         The label of an RMS Node metadata index names the host and instrument at its top
-        level. The label of an SSI volume's own index, IMGINDEX.LBL or CUMINDEX.LBL in its
-        INDEX directory, does not, but its table has the SSI columns MISSION_NAME,
-        INSTRUMENT_ID, and OBSTRUCTION_ID; for that label this detector returns True, so
-        that :meth:`from_index` refuses it before any row is read. For any other label
-        without the host's name it returns None, and the host is judged from a row by
-        :meth:`_detect_in_row`.
+        level. For a label without the host's name this detector returns None, and the
+        host is judged from a row by :meth:`_detect_in_row`.
         """
 
         host = label.get('INSTRUMENT_HOST_NAME')
         if host is not None:
             return host.startswith('GALILEO') and label.get('INSTRUMENT_ID', '') == 'SSI'
-
-        # The IMGINDEX.LBL and CUMINDEX.LBL of every volume from GO_0002 to GO_0023 lack
-        # INSTRUMENT_HOST_NAME and have these three columns; OBSTRUCTION_ID is an SSI
-        # item
-        for table in label.values():
-            if isinstance(table, dict) and all(isinstance(table.get(name), dict)
-                                               for name in _VOLUME_INDEX_COLUMNS):
-                return True
         return None
 
     @staticmethod

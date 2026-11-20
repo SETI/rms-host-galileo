@@ -264,11 +264,7 @@ def test_detect_in_vicar(label: dict[str, str], expected: bool) -> None:
     ({'INSTRUMENT_HOST_NAME': 'GALILEO', 'INSTRUMENT_ID': 'NIMS'}, False),
     ({'INSTRUMENT_HOST_NAME': 'CASSINI ORBITER', 'INSTRUMENT_ID': 'SSI'}, False),
     ({'IMAGE_INDEX_TABLE': {'ROWS': 1}}, None),
-    # A volume's own index needs all three of its SSI columns
-    ({'IMAGE_INDEX_TABLE': {'INSTRUMENT_ID': {}, 'OBSTRUCTION_ID': {}}}, None),
-    ({'IMAGE_INDEX_TABLE': {'MISSION_NAME': {}, 'OBSTRUCTION_ID': {}}}, None),
-], ids=['ssi', 'other-instrument', 'other-host', 'unnamed', 'no-mission-name',
-        'no-instrument-id'])
+], ids=['ssi', 'other-instrument', 'other-host', 'unnamed'])
 def test_detect_in_index(label: dict[str, Any], expected: bool | None) -> None:
     assert GalileoSSI._detect_in_index(label) is expected
 
@@ -1776,64 +1772,6 @@ def test_from_index_finds_the_volumes_beside_the_metadata(tmp_path: pathlib.Path
     obs = next(GalileoSSI.from_index(write_volume(metadata)))
     assert obs.filepath == FCPath(tmp_path / 'volumes/GO_0xxx/GO_0017/J0/OPNAV/'
                                   'C0346405900R.IMG')
-
-
-def write_volume_index(volume: pathlib.Path, directory: str = 'INDEX', *,
-                       obstruction: bool = True) -> pathlib.Path:
-    """Write the SSI index as a volume's own index, in its INDEX directory (or one named
-    `directory`), whose label does not name the instrument host, with the OBSTRUCTION_ID
-    column of an SSI volume's index unless `obstruction` is False; return the label's
-    path."""
-
-    columns = _INDEX_COLUMNS + [('OBSTRUCTION_ID', 'CHARACTER', 4)] * obstruction
-    rows = [(*row, 'NONE') if obstruction else row for row in _INDEX_ROWS]
-    (volume / directory).mkdir(parents=True)
-    return write_table(volume / directory, 'IMGINDEX', 'IMAGE_INDEX_TABLE', columns, rows)
-
-
-_VOLUME_INDEX_ERROR = (r'Galileo SSI reads the Ring-Moon Systems Node metadata index, '
-                       r'such as "GO_0017_index\.lbl", not a volume\'s own index: '
-                       r'.*GO_0017/(?i:index)/IMGINDEX\.lbl')
-
-
-@pytest.mark.parametrize(('directory', 'given_rows'), [('INDEX', False), ('INDEX', True),
-                                                       ('index', False)],
-                         ids=['read', 'row-dicts', 'lower-case'])
-def test_from_index_refuses_a_volumes_own_index(tmp_path: pathlib.Path, directory: str,
-                                                given_rows: bool) -> None:
-    index = write_volume_index(tmp_path / 'GO_0017', directory)
-    rows = index_rows(index) if given_rows else None
-    with pytest.raises(oops.host.HostIndexError, match=_VOLUME_INDEX_ERROR):
-        GalileoSSI.from_index(index, row_dicts=rows)
-
-
-# A label without the host's name or the SSI columns leaves every host undecided, so oops
-# refuses the index in its INDEX directory before any row is read, with its own message
-def test_host_from_index_refuses_a_volumes_own_index(tmp_path: pathlib.Path) -> None:
-    index = write_volume_index(tmp_path / 'GO_0017', obstruction=False)
-    with pytest.raises(oops.host.HostIndexError,
-                       match=r'^the registered hosts that might read this index read '
-                             r'only the Ring-Moon Systems Node metadata indexes, not a '
-                             r'volume\'s own index: .*GO_0017/INDEX/IMGINDEX\.lbl$'):
-        oops.Host.from_index(index)
-
-
-# The label of an SSI volume's own index identifies the host, so the refusal comes before
-# any row is read, here from a table file that does not exist
-def test_host_from_index_refuses_a_volumes_own_index_from_its_label(
-        tmp_path: pathlib.Path) -> None:
-    index = write_volume_index(tmp_path / 'GO_0017')
-    (index.parent / 'IMGINDEX.tab').unlink()
-    with pytest.raises(oops.host.HostIndexError, match=_VOLUME_INDEX_ERROR):
-        oops.Host.from_index(index)
-
-
-@pytest.mark.parametrize(('obstruction', 'detected'), [(True, True), (False, None)])
-def test_detect_in_index_recognizes_a_volumes_own_index(tmp_path: pathlib.Path,
-                                                        obstruction: bool,
-                                                        detected: bool | None) -> None:
-    label = Pds3Label(write_volume_index(tmp_path / 'GO_0017', obstruction=obstruction))
-    assert GalileoSSI._detect_in_index(label) is detected
 
 
 def test_from_index_parses_the_index_label_once(tmp_path: pathlib.Path,

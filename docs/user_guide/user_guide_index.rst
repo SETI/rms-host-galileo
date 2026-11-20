@@ -35,15 +35,9 @@ The index and its supplement
 The metadata tree of the Ring-Moon Systems Node holdings gives each GO volume a PDS3
 index, such as ``GO_0017_index.lbl``, with one row per SSI image, and a supplemental
 index beside it, ``GO_0017_supplemental_index.lbl``, whose rows give further values
-for the same images. The host needs both. Each row of the supplement is merged into the
-matching row of the index; where both tables give a column, the index's value is kept.
-
-A volume also carries its own PDS3 index, in its ``INDEX`` directory, such as
-``GO_0017/INDEX/IMGINDEX.LBL``. That index has no supplement, so it lacks the telemetry
-format and the cutout window of each image, and the host does not read it. An index in a
-directory named ``INDEX``, in upper or lower case, raises
-:exc:`~oops.host.HostIndexError` before anything else is read, with a message that points
-to the metadata index instead.
+for the same images. ``from_index()`` reads such a metadata index and its supplement. The
+host needs both. Each row of the supplement is merged into the matching row of the index;
+where both tables give a column, the index's value is kept.
 
 The ``supplement`` argument chooses the supplemental index:
 
@@ -187,13 +181,5 @@ Reading an index through oops.Host
 
 :meth:`oops.host.Host.from_index` recognizes an SSI index from its label and passes it,
 with every other argument, to :meth:`~host_galileo.oops.ssi.GalileoSSI.from_index`,
-which reads and pairs the two tables itself. The two give the same Snapshots. The label
-of an SSI volume's own index does not name its instrument, but its table has the
-``MISSION_NAME``, ``INSTRUMENT_ID``, and ``OBSTRUCTION_ID`` columns of an SSI volume's
-index, so :meth:`oops.host.Host.from_index` recognizes it from its label too and passes
-it to the host, which raises :exc:`~oops.host.HostIndexError` as described above before
-any row is read. An index whose label gives neither is recognized from its first row.
-When such an index is in a directory named ``INDEX``, :meth:`oops.host.Host.from_index`
-does not offer it to SSI, which reads only the metadata indexes; unless another
-registered host reads a volume's own index, it raises :exc:`~oops.host.HostIndexError`
-before any row is read.
+which reads and pairs the two tables itself. The two give the same Snapshots. An index
+whose label does not name its instrument is recognized from its first row.

@@ -35,10 +35,8 @@ __all__ = ['GalileoSSI']
 
 class GalileoSSI(Host):
     # False: every SSI index lists its files in its supplement's order, so the rows are
-    # paired by position. METADATA_INDEX_EXAMPLE is the metadata index that the message
-    # refusing a volume's own index gives as an example.
+    # paired by position.
     MERGE_SUPPLEMENT_BY_FILE: bool
-    METADATA_INDEX_EXAMPLE: str | None
     # The runtime names the first parameter `fileinfo`, where Host names it `filepath`.
     # Given the image file, only it is read; given a PDS3 label, the label and its image
     # file are read and their metadata merged, except that with astrometry=True the label
@@ -66,11 +64,11 @@ class GalileoSSI(Host):
         timeshift: tuple[float, str] | None = None,
         navigation: tuple[float, ...] | None = None, tracker: str | None = None,
         parallel: Observation | None = None, **kwargs: Any) -> Snapshot: ...
-    # Every row is one Snapshot. The index is the Ring-Moon Systems Node metadata index;
-    # one in a volume's INDEX directory raises oops.host.HostIndexError. The supplement
-    # is required: None raises oops.host.HostIndexError unless row_dicts is given. select
-    # must be None (oops.OopsValueError), and any other keyword raises
-    # oops.OopsTypeError. The call reads only the labels; the iterator reads the two
+    # Every row is one Snapshot. The index is the Ring-Moon Systems Node metadata index,
+    # read with its supplement. The supplement is required: None raises
+    # oops.host.HostIndexError unless row_dicts is given. select must be None
+    # (oops.OopsValueError), and any other keyword raises oops.OopsTypeError. The call
+    # reads only the labels; the iterator reads the two
     # tables a few rows at a time, pairs each index row with the supplement row in the
     # same position, builds each row's Snapshot when it reaches the row, and ends at the
     # first row that raises. Rows whose files differ raise oops.host.HostIndexError there.

@@ -60,8 +60,7 @@ Reading a PDS3 index
 called:
 
 :exc:`~oops.host.HostIndexError`
-    The index is a volume's own index, in a directory named ``INDEX`` in upper or lower
-    case; ``supplement`` is None and ``row_dicts`` is not given; the index's file name
+    ``supplement`` is None and ``row_dicts`` is not given; the index's file name
     lacks the ``_index`` from which to find the supplement; a label does not describe a
     table that can be read; or a table lacks ``VOLUME_ID`` or
     ``FILE_SPECIFICATION_NAME``.
