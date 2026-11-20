@@ -1807,8 +1807,8 @@ def test_from_index_refuses_a_volumes_own_index(tmp_path: pathlib.Path, director
         GalileoSSI.from_index(index, row_dicts=rows)
 
 
-# A label without the host's name or the SSI columns is claimed by no host, so oops
-# refuses the index in its INDEX directory before any row is read, naming no host
+# A label without the host's name or the SSI columns leaves every host undecided, so oops
+# refuses the index in its INDEX directory before any row is read, with its own message
 def test_host_from_index_refuses_a_volumes_own_index(tmp_path: pathlib.Path) -> None:
     index = write_volume_index(tmp_path / 'GO_0017', obstruction=False)
     with pytest.raises(oops.host.HostIndexError,
