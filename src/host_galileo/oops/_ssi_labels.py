@@ -30,53 +30,107 @@ _NULL_TEXTS = ('UNK', 'UNKNOWN', 'N/A', 'NULL', 'NOT APPLICABLE', '---', '')
 # indexes also write it, as their NULL_CONSTANT, for a missing number
 _VICAR_FILL = -999.
 
-# The value of a VICAR keyword that the header gives for no value, in a sample of 880
-# headers, 40 from each volume: PICNO "?" in 162 and SPICE_C_ID "?" in 64 of the 14,672
-# products; TCA "CLOSEST TIME" in 287 of the 600 phase-1 headers, where the others give a
-# time from closest approach such as "-000T02:21:45Z"; and SMEAR 0.1 in all 280 headers of
-# the Jupiter tour, where every earlier header gives the -999 fill and every PDS3 label
-# gives UNK for SMEAR_MAGNITUDE.
-_VICAR_FILLS = {'PICNO': '?', 'SPICE_C_ID': '?', 'TCA': 'CLOSEST TIME', 'SMEAR': 0.1}
+# The value of a VICAR keyword that the header gives for no value. PICNO "?" is in 162
+# and SPICE_C_ID "?" in 64 of the 14,672 products. The others were found in a sample of
+# 880 headers, 40 from each volume: TCA "CLOSEST TIME" in 287 of the sample's 600 phase-1
+# headers, where the others give a time from closest approach such as "-000T02:21:45Z";
+# and SMEAR 0.1 in all 280 headers of the Jupiter tour, where every earlier header gives
+# the -999 fill and every PDS3 label gives UNK for SMEAR_MAGNITUDE. The rest are the
+# values that each volume's CATALOG/DATASET.CAT documents as "not applicable" (RAD, the
+# ring radius, of 0.0) or "not implemented" (CONE and SMRAZ of 0.0, and SOLRANGE of
+# 7.779091e8 km, which is Jupiter's distance from the Sun even in the images of Venus,
+# the Earth, and Gaspra that give it).
+_VICAR_FILLS = {'PICNO': '?', 'SPICE_C_ID': '?', 'TCA': 'CLOSEST TIME', 'SMEAR': 0.1,
+                'RAD': 0., 'CONE': 0., 'SMRAZ': 0., 'SOLRANGE': 777909100.}
 
-# The value that an index or supplemental index column writes where it has none, for each
-# column whose declared null constant stands for no value. The supplement's CUT_OUT_WINDOW
-# is -1s for the 10,791 images with no cutout window. For the others, comparing the 14,662
-# rows of GO_0002-GO_0023 with both labels of each product: in 11,080 rows that hold the
-# constant, neither label gives the item at all; in the other 646 (TRUTH_WINDOW and the
-# ICT values) or 647-662 (the compression ratios), the labels give a real value the index
-# replaced, such as an ICT_DESPIKE_THRESHOLD of 255 or a compression ratio of 1.831. Only
-# 1-3 rows per ratio hold 0 where the labels also write 0. The index's SMEAR_MAGNITUDE is
-# 0.1 in all 3,993 rows of the Jupiter tour and -999 in every earlier row, where every
-# label gives UNK; the 0.1 is the VICAR header's placeholder (_VICAR_FILLS). The other
-# declared constants are real values that the product labels also give, and are kept:
-# EXPOSURE_DURATION 0 (301 rows), ON_CHIP_MOSAIC_FLAG N, and PRODUCT_VERSION_ID 0.
-_INDEX_PLACEHOLDERS = {
-    'CUT_OUT_WINDOW'                : [-1, -1, -1, -1],
-    'TRUTH_WINDOW'                  : [-1, -1, -1, -1],
-    'ICT_DESPIKE_THRESHOLD'         : -1,
-    'ICT_QUANTIZATION_STEP_SIZE'    : -1,
-    'ENCODING_COMPRESSION_RATIO'    : 0.,
-    'ENCODING_MAX_COMPRESSION_RATIO': 0.,
-    'ENCODING_MIN_COMPRESSION_RATIO': 0.,
-    'SMEAR_MAGNITUDE'               : 0.1,
+# The PDS3 items of the same documented values, in the PDS3 labels and the indexes. The
+# DATASET.CAT of each volume lists CENTER_RING_RADIUS = 0.0 as not applicable and
+# CONE_ANGLE = 0.000, SMEAR_AZIMUTH = 0.000, and SOLAR_DISTANCE = 7.779091e8 as not
+# implemented. No index row gives a CONE_ANGLE, SMEAR_AZIMUTH, or CENTER_RING_RADIUS of
+# 0: the indexes write -999 for them where the labels write 0.0. 5,354 of the 10,669
+# index rows before the Jupiter tour give the SOLAR_DISTANCE 777909100, and none in the
+# tour does.
+_PDS3_FILLS = {'CENTER_RING_RADIUS': 0., 'CONE_ANGLE': 0., 'SMEAR_AZIMUTH': 0.,
+               'SOLAR_DISTANCE': 777909100.}
+
+# The pointing items that the PDS3 label, the VICAR header (after their conversion to the
+# PDS3 names), and the index all give as 0 when the C kernels had no pointing for the
+# image, as DATASET.CAT documents. One of them can be 0 in a real pointing, so they count
+# as no value only when all three are 0.
+_POINTING_ITEMS = ('RIGHT_ASCENSION', 'DECLINATION', 'TWIST_ANGLE')
+
+# The labels before the Jupiter tour give the time from closest approach under other names
+# than the tour labels, the indexes, and the VICAR header's TCA do; the host gives them
+# under the tour labels' names
+_LABEL_NAMES = {
+    'TIME_FROM_CLOSEST_APPROACH'  : 'NTV_TIME_FROM_CLOSEST_APPROACH',
+    'SATELLITE_TIME_FROM_CLST_APR': 'NTV_SAT_TIME_FROM_CLOSEST_APRH',
 }
 
-# The index columns that hold the three compression ratios, and the ratio each holds. The
-# indexes of GO_0017-GO_0023, the only volumes whose rows give ratios, write each image's
-# maximum ratio under ENCODING_COMPRESSION_RATIO, its ratio under the minimum's name, and
-# its minimum under the maximum's name: in all 2,935 rows with a nonzero ratio, the three
-# values are the product label's ratio, minimum, and maximum in that rotated order, as in
-# GO_0021/C21/IO/C0506406074R (index 5.428, 3.758, 3.03; label 3.758, 3.03, 5.428). The
-# archive cannot be corrected (rms-data-projects #258), so the host renames them.
+# A value that an index or supplemental index column declares as its null or
+# not-applicable constant is no value, and the table reader marks it in the row's "_mask"
+# key. The SSI tables declare the supplement's CUT_OUT_WINDOW and TRUTH_WINDOW of -1, -1,
+# -1, -1, its ICT_DESPIKE_THRESHOLD and ICT_QUANTIZATION_STEP_SIZE of -1, the index's
+# compression ratios of 0, its numeric -999, and its ORBIT_NUMBER of -99. Comparing the
+# 14,662 rows of GO_0002-GO_0023 with both labels of each product: in 11,080 rows that
+# hold one of the window, ICT, or ratio constants, neither label gives the item at all; in
+# the other 646 (TRUTH_WINDOW and the ICT values) or 647-662 (the compression ratios), the
+# labels give a real value that the index replaced, such as an ICT_DESPIKE_THRESHOLD of
+# 255 or a compression ratio of 1.831, and only 1-3 rows per ratio hold 0 where the labels
+# also write 0. Until the index is corrected (rms-data-projects #258, item 1), those
+# values are lost. A corrected table declares the constants that it uses, so the host
+# follows the declarations rather than these values.
+#
+# The tables also declare three real values, which the product labels give too, as null
+# constants: EXPOSURE_DURATION 0 (301 rows), ON_CHIP_MOSAIC_FLAG N, and PRODUCT_VERSION_ID
+# 0. Until the index is corrected (rms-data-projects #258, item 2), the host keeps them;
+# a corrected table, which no longer declares them, gives the same values.
+_REAL_NULL_CONSTANTS = {'EXPOSURE_DURATION', 'ON_CHIP_MOSAIC_FLAG', 'PRODUCT_VERSION_ID'}
+
+# The value that an index column writes where it has none, without declaring it. The
+# index's SMEAR_MAGNITUDE is 0.1 in all 3,993 rows of the Jupiter tour and -999 in every
+# earlier row, where every label gives UNK; the 0.1 is the VICAR header's placeholder
+# (_VICAR_FILLS) and never a real value (rms-data-projects #258, item 11).
+_INDEX_PLACEHOLDERS = {'SMEAR_MAGNITUDE': 0.1}
+
+# The index columns that hold the three compression ratios in a table that has them in
+# rotated columns, and the ratio each holds. Every current SSI index label names the
+# three columns, in the order of their bytes in the row, ENCODING_MIN_COMPRESSION_RATIO,
+# ENCODING_MAX_COMPRESSION_RATIO, and ENCODING_COMPRESSION_RATIO, but the values in them
+# are each image's ratio, minimum, and maximum, the order in which each volume's own
+# INDEX/IMGINDEX.LBL names its columns. So the index gives each image's maximum under
+# ENCODING_COMPRESSION_RATIO, its ratio under the minimum's name, and its minimum under
+# the maximum's name: in all 2,935 rows with a nonzero ratio (GO_0017-GO_0023 and the
+# cumulative GO_0999), the three values are the product label's in that rotated order, as
+# in GO_0021/C21/IO/C0506406074R (index 5.428, 3.758, 3.03; label 3.758, 3.03, 5.428).
+# Until the index is corrected (rms-data-projects #258, item 8), the host gives each value
+# under the name of the ratio it holds, in a table whose label shows the defect
+# (ratios_rotated).
 _INDEX_RATIO_COLUMNS = {
     'ENCODING_COMPRESSION_RATIO'    : 'ENCODING_MAX_COMPRESSION_RATIO',
     'ENCODING_MIN_COMPRESSION_RATIO': 'ENCODING_COMPRESSION_RATIO',
     'ENCODING_MAX_COMPRESSION_RATIO': 'ENCODING_MIN_COMPRESSION_RATIO',
 }
 
+# The ratio columns in the order of their bytes in a table whose label shows the defect,
+# and the PRODUCT_CREATION_TIME of the newest of the current SSI index labels, that of
+# GO_0999. A corrected label either names the columns in another order or, if it was
+# made again, has a later creation time.
+_ROTATED_RATIO_ORDER = ('ENCODING_MIN_COMPRESSION_RATIO',
+                        'ENCODING_MAX_COMPRESSION_RATIO',
+                        'ENCODING_COMPRESSION_RATIO')
+_LAST_ROTATED_LABEL = '2025-10-30T14:33:30'
+
+# The index column names that differ from the product labels' names for the same item:
+# the indexes drop the last letter of the tour labels' NTV_SAT_TIME_FROM_CLOSEST_APRH
+# (rms-data-projects #258)
+_INDEX_NAMES = {'NTV_SAT_TIME_FROM_CLOSEST_APR': 'NTV_SAT_TIME_FROM_CLOSEST_APRH'}
+
 # The index values that the product labels give differently, and the labels' value. The
 # indexes give all 3,993 images of the Jupiter tour data set version 1.0, where every
-# product label and every volume's own index give version 1.1 (rms-data-projects #258).
+# product label and every volume's own index give version 1.1. Until the index is
+# corrected (rms-data-projects #258, item 9), the host gives the labels' version; a
+# corrected row already gives it.
 _INDEX_VALUE_REPAIRS = {
     'DATA_SET_ID': {'GO-J/JSA-SSI-2-REDR-V1.0': 'GO-J/JSA-SSI-2-REDR-V1.1',
                     'GO-J/JSA-SSI-4-REDR-V1.0': 'GO-J/JSA-SSI-4-REDR-V1.1'},
@@ -144,7 +198,8 @@ _TIME_LIMITS = {'YEAR': (1, dt.MAXYEAR), 'DAY': (1, 366), 'HOUR': (0, 23),
 # The orbits of the Jupiter tour, as the code that begins an observation ID: the orbit
 # number as two digits from orbit 10 on, and before that the initial of the orbit's
 # encounter target followed by its single digit. The IDs of the earlier mission phases,
-# including those of the Earth flybys, which begin "E1" and "E2", name no orbit.
+# including those of the Earth flybys, which begin "E1" and "E2", begin with no orbit
+# code.
 _ORBIT_CODE = re.compile(r'\d\d|J0|G1|G2|C3|E4|J5|E6|G7|G8|C9')
 
 # The orbit numbers of the Jupiter tour, from J0 to orbit 35
@@ -317,8 +372,13 @@ def label_items(label_dict):
         dict: Every keyword of the label whose value is not a PDS3 null, including each
         object with the same treatment. A null element of a list is left out: the lists
         of an SSI label whose positions carry meaning (CUT_OUT_WINDOW, TRUTH_WINDOW, and
-        STAR_WINDOW) never hold one. An ORBIT_NUMBER that is not an orbit of the Jupiter
-        tour (0-35) is omitted.
+        STAR_WINDOW) never hold one. A value that the archive documents as not
+        implemented or not applicable is left out: a CONE_ANGLE, SMEAR_AZIMUTH, or
+        CENTER_RING_RADIUS of 0, a SOLAR_DISTANCE of 777909100, and the RIGHT_ASCENSION,
+        DECLINATION, and TWIST_ANGLE when all three are 0. So is an ORBIT_NUMBER that is
+        not an orbit of the Jupiter tour (0-35). TIME_FROM_CLOSEST_APPROACH and
+        SATELLITE_TIME_FROM_CLST_APR are given under the tour labels' names,
+        NTV_TIME_FROM_CLOSEST_APPROACH and NTV_SAT_TIME_FROM_CLOSEST_APRH.
     """
 
     items = {}
@@ -327,8 +387,9 @@ def label_items(label_dict):
             value = label_items(value)
         elif isinstance(value, list) and not is_null(value):
             value = [item for item in value if not is_null(item)]
-        if not is_null(value):
-            items[key] = value
+        if not is_null(value) and value != _PDS3_FILLS.get(key):
+            items[_LABEL_NAMES.get(key, key)] = value
+    _drop_unknown_pointing(items)
 
     # The labels of GO_0003-GO_0009 and GO_0016 give the ORBIT_NUMBER of every frame as
     # the first two characters of its observation ID read as a 16-bit integer, such as
@@ -338,6 +399,18 @@ def label_items(label_dict):
         items.pop('ORBIT_NUMBER', None)
 
     return items
+
+
+def _drop_unknown_pointing(items):
+    """Remove the pointing items if all three are 0, which stands for no pointing.
+
+    Parameters:
+        items (dict): The items of one source, modified in place.
+    """
+
+    if all(items.get(key) == 0 for key in _POINTING_ITEMS):
+        for key in _POINTING_ITEMS:
+            del items[key]
 
 
 def header_items(header_dict):
@@ -357,10 +430,13 @@ def header_items(header_dict):
         GAIN_MODE_ID. FILTER_NAME comes from the filter number. MOD10 and MOD8, and the
         flags FIBE and MOFIBE, which give EXPOSURE_TYPE but more besides, keep their own
         names, as does a code with no PDS3 value. ORBIT_NUMBER comes from the
-        observation ID. A value the header leaves unset (a numeric -999, a PICNO or
-        SPICE_C_ID of "?", a TCA of "CLOSEST TIME", a SMEAR of 0.1, a placeholder text
-        such as NOT APPLICABLE, a set of time fields that is not a valid time, or an
-        observation ID that names no orbit of the Jupiter tour) gives no item.
+        observation ID. A value the header leaves unset is left out: a numeric -999, a
+        PICNO or SPICE_C_ID of "?", a TCA of "CLOSEST TIME", a SMEAR of 0.1, the values
+        that the archive documents as not implemented or not applicable (a RAD, CONE, or
+        SMRAZ of 0 and a SOLRANGE of 777909100), RA, DEC, and TWIST when all three are
+        0, a placeholder text such as NOT APPLICABLE, and a set of time fields that is not
+        a valid time. ORBIT_NUMBER is given only for an observation ID that begins with an
+        orbit of the Jupiter tour.
     """
 
     items = {}
@@ -374,6 +450,7 @@ def header_items(header_dict):
     for (pds3_key, vicar_key) in _VICAR_PDS3_PAIRS:
         if vicar_key in items:
             items[pds3_key] = items.pop(vicar_key)
+    _drop_unknown_pointing(items)
 
     if 'RIM' in items and 'MOD91' in items:
         items['SPACECRAFT_CLOCK_START_COUNT'] = (f'{items.pop("RIM"):08d}.'
@@ -446,43 +523,89 @@ def _vicar_time(fields):
     return f'{date.isoformat()}T{hour:02d}:{minute:02d}:{second:02d}.{msec:03d}'
 
 
-def row_items(row_dict):
+def ratios_rotated(label):
+    """True if an index table writes the three compression ratios in rotated columns.
+
+    The decision is made once for the whole table, from its label: the table has the
+    defect if its label names the three ratio columns, in the order of their bytes in the
+    row, ENCODING_MIN_COMPRESSION_RATIO, ENCODING_MAX_COMPRESSION_RATIO, and
+    ENCODING_COMPRESSION_RATIO, as every current SSI index label does, and if the label
+    was made no later than the newest of those labels. A table whose label names the
+    columns in another order, or was made later, is taken to be corrected.
+
+    Parameters:
+        label (Pds3Label | dict): The label of the index.
+
+    Returns:
+        bool: True if the table's ratio columns are rotated.
+    """
+
+    created = label.get('PRODUCT_CREATION_TIME')
+    if isinstance(created, (dt.date, dt.time)):
+        created = created.isoformat()
+    if created is not None and str(created) > _LAST_ROTATED_LABEL:
+        return False
+
+    for table in label.values():
+        if isinstance(table, dict) and all(isinstance(table.get(name), dict)
+                                           for name in _ROTATED_RATIO_ORDER):
+            starts = [table[name].get('START_BYTE', 0) for name in _ROTATED_RATIO_ORDER]
+            return starts == sorted(starts)
+    return False
+
+
+def row_items(row_dict, *, rotated_ratios=False):
     """The metadata items of a row of an SSI index and its supplement.
 
     Parameters:
-        row_dict (dict): The row, as given by `oops.Host._read_index_rows()`.
+        row_dict (dict): The row, as given by `oops.Host._index_rows()`.
+        rotated_ratios (bool, optional): True if the row comes from a table that writes
+            the three compression ratios in rotated columns, as :func:`ratios_rotated`
+            decides from the table's label.
 
     Returns:
         dict: Every column value of the row as a Python str (stripped of padding), int,
-        float, bool, or list, except a PDS3 null, a numeric -999 (the indexes' null
-        constant for a missing number), a column's placeholder for an image that has no
-        such value (such as the CUT_OUT_WINDOW of -1, -1, -1, -1, the compression ratio
-        of 0, and the SMEAR_MAGNITUDE of 0.1), and an ORBIT_NUMBER that is not an orbit
-        of the Jupiter tour (0-35), which the index writes as -99 for the earlier frames.
-        The three compression ratios, which the index writes in rotated columns, are
-        given under the names of the ratios they hold: the value of the index's
-        ENCODING_COMPRESSION_RATIO as ENCODING_MAX_COMPRESSION_RATIO, of its
-        ENCODING_MIN_COMPRESSION_RATIO as ENCODING_COMPRESSION_RATIO, and of its
-        ENCODING_MAX_COMPRESSION_RATIO as ENCODING_MIN_COMPRESSION_RATIO. The
-        DATA_SET_ID of the Jupiter tour, which the index gives as version 1.0, is given as
-        version 1.1, as every product label gives it. The "_mask" keys that the table
-        reader adds are left out, and its masks are not applied: the SSI indexes declare
-        real values as null constants, such as an EXPOSURE_DURATION of 0 and an
-        ON_CHIP_MOSAIC_FLAG of N.
+        float, bool, or list. A value that stands for no value is left out: a value that
+        the table reader masks because the table declares it as the column's null or
+        not-applicable constant (such as the CUT_OUT_WINDOW of -1, -1, -1, -1 and the
+        compression ratio of 0), except in the three columns whose declared constant is
+        a real value, EXPOSURE_DURATION, ON_CHIP_MOSAIC_FLAG, and PRODUCT_VERSION_ID; a
+        PDS3 null; a numeric -999 (the indexes' null constant for a missing number); the
+        SMEAR_MAGNITUDE of 0.1; a value that the archive documents as not implemented or
+        not applicable (such as the SOLAR_DISTANCE of 777909100); the RIGHT_ASCENSION,
+        DECLINATION, and TWIST_ANGLE when all three are 0; and an ORBIT_NUMBER that is
+        not an orbit of the Jupiter tour (0-35), which the index writes as -99 for the
+        earlier frames.
+        With `rotated_ratios`, the three compression ratios are given under the names of
+        the ratios they hold: the value of the index's ENCODING_COMPRESSION_RATIO as
+        ENCODING_MAX_COMPRESSION_RATIO, of its ENCODING_MIN_COMPRESSION_RATIO as
+        ENCODING_COMPRESSION_RATIO, and of its ENCODING_MAX_COMPRESSION_RATIO as
+        ENCODING_MIN_COMPRESSION_RATIO. A DATA_SET_ID of the Jupiter tour with version
+        1.0 is given as version 1.1, as every product label gives it, and
+        NTV_SAT_TIME_FROM_CLOSEST_APR is given under the labels' name,
+        NTV_SAT_TIME_FROM_CLOSEST_APRH. The "_mask" keys themselves are left out. A row
+        that lacks them, as rows built by hand may, keeps the values that they would
+        have masked.
     """
 
     items = {}
     for (key, value) in row_dict.items():
         if key.endswith('_mask'):
             continue
-        key = _INDEX_RATIO_COLUMNS.get(key, key)
+        if (key not in _REAL_NULL_CONSTANTS
+                and np.all(row_dict.get(key + '_mask', False))):
+            continue
+        if rotated_ratios:
+            key = _INDEX_RATIO_COLUMNS.get(key, key)
+        key = _INDEX_NAMES.get(key, key)
         value = value.tolist() if isinstance(value, (np.ndarray, np.generic)) else value
         if isinstance(value, str):
             value = value.strip()
             value = _INDEX_VALUE_REPAIRS.get(key, {}).get(value, value)
         if (value != _VICAR_FILL and value != _INDEX_PLACEHOLDERS.get(key)
-                and not is_null(value)):
+                and value != _PDS3_FILLS.get(key) and not is_null(value)):
             items[key] = value
+    _drop_unknown_pointing(items)
 
     if 'ORBIT_NUMBER' in items and items['ORBIT_NUMBER'] not in _ORBITS:
         del items['ORBIT_NUMBER']

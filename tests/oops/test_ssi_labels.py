@@ -113,6 +113,40 @@ def test_label_items_drop_a_list_of_nulls() -> None:
 def test_label_items_keep_only_tour_orbits(orbit: Any, kept: bool) -> None:
     assert ('ORBIT_NUMBER' in _ssi_labels.label_items({'ORBIT_NUMBER': orbit})) is kept
 
+
+# The values that DATASET.CAT documents as not implemented or not applicable
+@pytest.mark.parametrize(('key', 'fill'), [('CONE_ANGLE', 0.), ('SMEAR_AZIMUTH', 0.),
+                                           ('CENTER_RING_RADIUS', 0.),
+                                           ('SOLAR_DISTANCE', 777909100.)])
+def test_label_items_documented_fill_is_no_value(key: str, fill: float) -> None:
+    assert _ssi_labels.label_items({key: fill}) == {}
+
+
+def test_label_items_keep_a_real_solar_distance() -> None:
+    label = {'SOLAR_DISTANCE': 7.41e8}
+    assert _ssi_labels.label_items(label) == label
+
+
+_NO_POINTING = {'RIGHT_ASCENSION': 0., 'DECLINATION': 0., 'TWIST_ANGLE': 0.}
+
+
+def test_label_items_pointing_of_zeros_is_no_value() -> None:
+    assert _ssi_labels.label_items(_NO_POINTING) == {}
+
+
+# One angle of a real pointing can be 0
+def test_label_items_keep_a_pointing_with_one_zero() -> None:
+    label = _NO_POINTING | {'DECLINATION': -6.405}
+    assert _ssi_labels.label_items(label) == label
+
+
+@pytest.mark.parametrize(('key', 'name'), [
+    ('TIME_FROM_CLOSEST_APPROACH', 'NTV_TIME_FROM_CLOSEST_APPROACH'),
+    ('SATELLITE_TIME_FROM_CLST_APR', 'NTV_SAT_TIME_FROM_CLOSEST_APRH'),
+])
+def test_label_items_name_the_time_from_closest_approach(key: str, name: str) -> None:
+    assert _ssi_labels.label_items({key: '003T01:09:57Z'}) == {name: '003T01:09:57Z'}
+
 ##########################################################################################
 # header_items()
 ##########################################################################################
@@ -173,9 +207,21 @@ def test_header_items_without_a_value(header: dict[str, Any], key: str) -> None:
 
 
 @pytest.mark.parametrize(('key', 'fill'), [('PICNO', '?'), ('SPICE_C_ID', '?'),
-                                           ('TCA', 'CLOSEST TIME'), ('SMEAR', 0.1)])
+                                           ('TCA', 'CLOSEST TIME'), ('SMEAR', 0.1),
+                                           ('RAD', 0.), ('CONE', 0.), ('SMRAZ', 0.),
+                                           ('SOLRANGE', 777909100.)])
 def test_header_items_fill_is_no_value(key: str, fill: Any) -> None:
     assert _ssi_labels.header_items({key: fill}) == {}
+
+
+def test_header_items_pointing_of_zeros_is_no_value() -> None:
+    assert _ssi_labels.header_items({'RA': 0., 'DEC': 0., 'TWIST': 0.}) == {}
+
+
+def test_header_items_keep_a_pointing_with_one_zero() -> None:
+    items = _ssi_labels.header_items({'RA': -87.6903, 'DEC': 0., 'TWIST': -104.19})
+    assert items == {'RIGHT_ASCENSION': -87.6903, 'DECLINATION': 0.,
+                     'TWIST_ANGLE': -104.19}
 
 
 # A fill value of one keyword is a real value of another
@@ -272,17 +318,44 @@ def test_row_items_drop_nulls() -> None:
 
 
 @pytest.mark.parametrize(('column', 'value'), [
-    ('CUT_OUT_WINDOW', np.array([-1, -1, -1, -1])),
-    ('TRUTH_WINDOW', np.array([-1, -1, -1, -1])),
-    ('ICT_DESPIKE_THRESHOLD', np.int64(-1)),
-    ('ICT_QUANTIZATION_STEP_SIZE', np.int64(-1)),
-    ('ENCODING_COMPRESSION_RATIO', np.float64(0.)),
-    ('ENCODING_MAX_COMPRESSION_RATIO', np.float64(0.)),
-    ('ENCODING_MIN_COMPRESSION_RATIO', np.float64(0.)),
     ('SMEAR_MAGNITUDE', np.float64(0.1)),
+    ('SOLAR_DISTANCE', np.float64(777909100.)),
 ])
 def test_row_items_drop_a_placeholder(column: str, value: Any) -> None:
     assert _ssi_labels.row_items({column: value}) == {}
+
+
+# A value that the table declares as its column's constant is masked by the table reader
+@pytest.mark.parametrize(('value', 'mask'), [
+    (np.array([-1, -1, -1, -1]), np.array([True, True, True, True])),
+    (np.float64(0.), np.True_),
+], ids=['window', 'ratio'])
+def test_row_items_drop_a_declared_constant(value: Any, mask: Any) -> None:
+    assert _ssi_labels.row_items({'X': value, 'X_mask': mask}) == {}
+
+
+# A corrected table that declares another constant keeps a real value of 0
+def test_row_items_keep_an_undeclared_value() -> None:
+    row = {'ENCODING_COMPRESSION_RATIO': np.float64(0.),
+           'ENCODING_COMPRESSION_RATIO_mask': np.False_}
+    assert _ssi_labels.row_items(row) == {'ENCODING_COMPRESSION_RATIO': 0.}
+
+
+def test_row_items_keep_a_partly_masked_value() -> None:
+    row = {'X': np.array([1, -1]), 'X_mask': np.array([False, True])}
+    assert _ssi_labels.row_items(row) == {'X': [1, -1]}
+
+
+def test_row_items_pointing_of_zeros_is_no_value() -> None:
+    row = {'RIGHT_ASCENSION': np.float64(0.), 'DECLINATION': np.float64(0.),
+           'TWIST_ANGLE': np.float64(0.)}
+    assert _ssi_labels.row_items(row) == {}
+
+
+def test_row_items_name_the_satellite_time_as_the_labels_do() -> None:
+    row = {'NTV_SAT_TIME_FROM_CLOSEST_APR': np.str_('000T00:20:02Z')}
+    items = _ssi_labels.row_items(row)
+    assert items == {'NTV_SAT_TIME_FROM_CLOSEST_APRH': '000T00:20:02Z'}
 
 
 @pytest.mark.parametrize(('index', 'label'), [
@@ -297,13 +370,52 @@ def test_row_items_give_the_labels_data_set_version(index: str, label: str) -> N
 
 # The tour indexes write the ratio, minimum, and maximum of GO_0021/C21/IO/C0506406074R
 # (3.758, 3.03, 5.428 in its label) as 5.428, 3.758, 3.03
+_ROTATED_ROW = {'ENCODING_COMPRESSION_RATIO': np.float64(5.428),
+                'ENCODING_MIN_COMPRESSION_RATIO': np.float64(3.758),
+                'ENCODING_MAX_COMPRESSION_RATIO': np.float64(3.03)}
+
+
 def test_row_items_name_the_rotated_compression_ratios() -> None:
-    row = {'ENCODING_COMPRESSION_RATIO': np.float64(5.428),
-           'ENCODING_MIN_COMPRESSION_RATIO': np.float64(3.758),
-           'ENCODING_MAX_COMPRESSION_RATIO': np.float64(3.03)}
-    assert _ssi_labels.row_items(row) == {'ENCODING_COMPRESSION_RATIO': 3.758,
-                                          'ENCODING_MIN_COMPRESSION_RATIO': 3.03,
-                                          'ENCODING_MAX_COMPRESSION_RATIO': 5.428}
+    assert _ssi_labels.row_items(_ROTATED_ROW, rotated_ratios=True) == {
+        'ENCODING_COMPRESSION_RATIO': 3.758, 'ENCODING_MIN_COMPRESSION_RATIO': 3.03,
+        'ENCODING_MAX_COMPRESSION_RATIO': 5.428}
+
+
+# A corrected table gives each ratio under its own name
+def test_row_items_keep_the_ratios_of_a_corrected_table() -> None:
+    assert _ssi_labels.row_items(_ROTATED_ROW) == {
+        'ENCODING_COMPRESSION_RATIO': 5.428, 'ENCODING_MIN_COMPRESSION_RATIO': 3.758,
+        'ENCODING_MAX_COMPRESSION_RATIO': 3.03}
+
+
+def index_label(order: tuple[str, ...], created: Any = None) -> dict[str, Any]:
+    """An index label dictionary whose table has the three ratio columns in the given
+    order of their bytes, made at `created` (no PRODUCT_CREATION_TIME if None)."""
+
+    table = {'OBJECT': 'IMAGE_INDEX_TABLE', 'VOLUME_ID': {'START_BYTE': 2}}
+    table |= {name: {'NAME': name, 'START_BYTE': 600 + 9 * k}
+              for (k, name) in enumerate(order)}
+    label: dict[str, Any] = {'^IMAGE_INDEX_TABLE': 'GO_0017_index.tab'}
+    if created is not None:
+        label['PRODUCT_CREATION_TIME'] = created
+    return label | {'IMAGE_INDEX_TABLE': table}
+
+
+_MIN = 'ENCODING_MIN_COMPRESSION_RATIO'
+_MAX = 'ENCODING_MAX_COMPRESSION_RATIO'
+_RATIO = 'ENCODING_COMPRESSION_RATIO'
+
+
+@pytest.mark.parametrize(('label', 'rotated'), [
+    (index_label((_MIN, _MAX, _RATIO)), True),
+    (index_label((_MIN, _MAX, _RATIO), dt.datetime(2025, 10, 30, 14, 33, 30)), True),
+    (index_label((_MIN, _MAX, _RATIO), '2025-10-30T14:33:31'), False),
+    (index_label((_RATIO, _MIN, _MAX), dt.datetime(2025, 10, 30, 13, 48, 44)), False),
+    (index_label((_MIN, _RATIO, _MAX)), False),
+    ({'IMAGE_INDEX_TABLE': {'VOLUME_ID': {'START_BYTE': 2}}}, False),
+], ids=['rotated', 'last-rotated', 'made-later', 'renamed', 'other-order', 'no-ratios'])
+def test_ratios_rotated(label: dict[str, Any], rotated: bool) -> None:
+    assert _ssi_labels.ratios_rotated(label) is rotated
 
 
 @pytest.mark.parametrize(('orbit', 'kept'), [(0, True), (35, True), (-99, False)])
