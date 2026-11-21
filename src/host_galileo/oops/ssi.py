@@ -1064,7 +1064,9 @@ class GalileoSSI(oops.Host):
                 list a kernel of some kind from before the date, it chooses as if no date
                 were given. The first leap-second kernel is loaded without the date, and
                 the fixed set of kernels ignores it; the fixed set is furnished last, so
-                it overrides the database's choices wherever the two overlap.
+                it overrides the database's choices wherever the two overlap. The fields
+                of view are built from the instrument kernel that the database chooses,
+                before the fixed set is furnished.
             irregulars (bool, optional): True to include the irregular satellites; False
                 otherwise.
 

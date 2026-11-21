@@ -96,8 +96,11 @@ before it. It changes less than that suggests:
   chooses as if no date were given, without a warning. With ``asof='1997-01-01'``, for
   example, the database chooses the leap-second kernel of 2016.
 
-The date can change only the planetary constants and the ephemerides of bodies that
-the fixed set does not cover.
+The date can change the planetary constants and the ephemerides of bodies that the
+fixed set does not cover. It could also change the camera's fields of view, which are
+built from the instrument kernel that the database chooses, before the fixed set is
+furnished. The database lists a single SSI instrument kernel, the one in the fixed
+set, so the fields of view are the same whatever the date.
 
 Image files and indexes
 =======================

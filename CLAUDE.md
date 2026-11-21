@@ -253,8 +253,10 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   `redo=True` drops the date where nothing qualifies (a 2016 LSK under 1997-01-01),
   `oops.spice.load_leap_seconds()` does not take a date, and `load_kernels()` furnishes
   `_KERNELS` last, which overrides the database wherever they overlap (Jupiter, Io, and
-  Europa states are identical with and without `asof`). Whether `asof` should change
-  that is an open operator question; do not change the load order without a ruling.
+  Europa states are identical with and without `asof`). The FOVs are built from the
+  dated `spice_instrument_kernel()` choice before `load_kernels()`, but SPICE.db lists
+  only one SSI IK (gll36001.ti, the fixed one). Whether `asof` should change that is
+  an open operator question; do not change the load order without a ruling.
 
 ## Repo etiquette
 
