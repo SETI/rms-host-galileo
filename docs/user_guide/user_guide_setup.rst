@@ -39,8 +39,10 @@ included, at ``https://storage.googleapis.com/rms-node-oops-resources``, a URL t
 The host furnishes one fixed set of kernels, which covers the whole mission. They lie
 under ``General`` and ``Galileo`` in the ``SPICE_PATH`` directory: the leap-second
 kernel, the spacecraft clock kernel, the frame kernel, the planetary and spacecraft
-ephemerides, and the scan platform C kernels. The SSI instrument kernel is chosen
-through the database.
+ephemerides, and the scan platform C kernels. The rest are chosen through the
+database: the SSI instrument kernel, and the kernels that OOPS loads to define the
+planets and moons, which are a leap-second kernel, the planetary constants, and the
+ephemerides of the planets and their moons.
 
 Registering the host
 ====================
@@ -64,8 +66,10 @@ Initialization
 The first call to :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file` or
 :meth:`~host_galileo.oops.ssi.GalileoSSI.from_index` loads the kernels and defines the
 camera's fields of view. To choose the bodies that OOPS defines, or to use only the
-instrument kernel that existed before a given date, call
+kernels that existed before a given date, call
 :meth:`~host_galileo.oops.ssi.GalileoSSI.initialize` before opening the first image.
+The date applies to every kernel chosen through the database, and never to the fixed
+set.
 Its ``planets`` option takes one planet number, from 1 for Mercury to 9 for Pluto, or a
 sequence of them. This call defines Jupiter, planet 5, and its moons, and no other
 planet:

@@ -710,13 +710,13 @@ class GalileoSSI(oops.Host):
             oops.host.PdsHostError: At call time, if the label of the index or of the
                 supplement cannot be parsed.
             oops.host.WrongHostError: At call time, if `filepath` is not a Galileo SSI
-                index.
+                index. With `row_dicts`, the index is not checked.
             OSError: At call time, if the label of `filepath` or of the supplement does
                 not exist or cannot be read (FileNotFoundError for a missing
                 supplement). When the iteration starts, if a table file does not exist or
                 cannot be read; at call time for the index table, if the index label
-                lacks INSTRUMENT_HOST_NAME and INSTRUMENT_ID, so that the first row is
-                read to recognize the index.
+                lacks INSTRUMENT_HOST_NAME, so that the first row is read to recognize
+                the index. With `row_dicts`, the index table is not read.
         """
 
         oops.Host._check_select(select, unit='row of a Galileo SSI index')

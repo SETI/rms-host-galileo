@@ -189,9 +189,10 @@ the location of the index:
 The row's ``VOLUME_ID`` and file specification complete the path. Reading an index does
 not retrieve the image files, so no Snapshot has ``abspath``, even when the image file is
 on the local disk or already in the local cache. The paths are formed without creating
-any directory, even when the volumes are not there. Only the SPICE kernels that the
-host always loads can reach the local cache, when they are remote, on the first call
-of the host.
+any directory, even when the volumes are not there. A remote index and its supplement
+are retrieved into the local cache when they are read, and when the SPICE kernels are
+remote, the first call of the host retrieves the kernels that it always loads into a
+local cache.
 
 Reading an index through oops.Host
 ==================================
