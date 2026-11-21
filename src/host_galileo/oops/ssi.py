@@ -233,10 +233,12 @@ class GalileoSSI(oops.Host):
               name. A VICAR keyword the host converts appears only under its PDS3 name:
               RIM and MOD91 as SPACECRAFT_CLOCK_START_COUNT, the SCET fields as
               IMAGE_TIME. MOD10 and MOD8, the finer fields of the clock count, keep their
-              own names. Times are ISO 8601 strings, such as "1996-06-26T08:46:04.890",
-              sets are lists, and every value has the same type from either label, so
-              that `json` can write the dictionary. The keys that the PDS3 parser adds
-              (such as "^IMAGE_offset" and "IMAGE_TIME_fmt") are left out.
+              own names; only the VICAR header gives them, so an astrometry read of the
+              PDS3 label leaves them out. Times are ISO 8601 strings, such as
+              "1996-06-26T08:46:04.890", sets are lists, and every value has the same
+              type from either label, so that `json` can write the dictionary. The keys
+              that the PDS3 parser adds (such as "^IMAGE_offset" and "IMAGE_TIME_fmt")
+              are left out.
             - `label_dict`: the PDS3 label as given by `Pds3Label.as_dict()`, if the PDS3
               label was read, in a form that `json` can write: each time as the label
               writes it, each set as a list in label order, no key whose value is None,

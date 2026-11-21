@@ -636,6 +636,15 @@ def test_from_file_vicar_reads_the_clock(tmp_path: pathlib.Path, key: str) -> No
     assert obs.dict[key] == _CLOCK[key]
 
 
+# An astrometry read of the label reads only the label, which holds neither field
+@pytest.mark.parametrize('key', ['MOD10', 'MOD8'])
+def test_from_file_pds3_astrometry_lacks_the_finer_clock(tmp_path: pathlib.Path,
+                                                         key: str) -> None:
+    path = write_pds3_image(tmp_path, header=_CLOCK,
+                            SPACECRAFT_CLOCK_START_COUNT='03496321.37')
+    assert key not in GalileoSSI.from_file(path, astrometry=True).dict
+
+
 # RIM and MOD91 are wholly inside SPACECRAFT_CLOCK_START_COUNT; MOD10 and MOD8 are not
 def test_from_file_vicar_gives_rim_and_mod91_only_in_the_clock_count(
         tmp_path: pathlib.Path) -> None:
