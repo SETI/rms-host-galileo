@@ -206,9 +206,7 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   form and the index in label form, so the default validation, which compares every
   shared column, would reject every real pair until the index is corrected;
   `validate=()` leaves the pairing's comparison of `FILE_SPECIFICATION_NAME` as the only
-  check, which is right on a corrected table too. `file_key='FILE_SPECIFICATION_NAME'`
-  is oops's default but is named, because only a named key makes a table without the
-  column fail at call time; by default such tables are paired without comparing files.
+  check, which is right on a corrected table too.
   By default (`supplement=oops.Host.SUPPLEMENT`) the supplement beside the index is read,
   and it must exist (`FileNotFoundError`); `supplement=None` raises `HostIndexError`
   unless `row_dicts` is given. Index values win the merge, so the clock count stays in

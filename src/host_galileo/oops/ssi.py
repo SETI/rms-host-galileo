@@ -718,13 +718,10 @@ class GalileoSSI(oops.Host):
         # "RRRRRRRR:MM:S:T" and the index in the label form "RRRRRRRR.MM", so the default
         # validation, which compares every shared column, would reject every real pair
         # until the index is corrected (rms-data-projects #258, item 4); the pairing's
-        # comparison of FILE_SPECIFICATION_NAME is the only check. The key is named,
-        # although it is oops's default, so that a table without the column is refused
-        # at call time instead of being paired without comparing the files.
+        # comparison of FILE_SPECIFICATION_NAME is the only check.
         rows = GalileoSSI._index_rows(index_path, supplement=supplement, label=label,
                                       row_dicts=row_dicts, pds3_options=pds3_options,
-                                      filter=filter, validate=(),
-                                      file_key='FILE_SPECIFICATION_NAME')
+                                      filter=filter, validate=())
 
         overrides = {
             'target'      : target,
