@@ -176,7 +176,8 @@ class _Galileo:
         After the first call, later calls to this function are ignored.
 
         Parameters:
-            planets (list, optional): A list of planets to pass to
+            planets (int | collections.abc.Sequence[int], optional): The number of one
+                planet, from 1 to 9, or a sequence of such numbers, to pass to
                 :meth:`~oops.Body.define_solar_system`. None or 0 means all.
             asof (str, optional): Only use SPICE kernels that existed before this date;
                 None to ignore.
@@ -258,7 +259,7 @@ class _Galileo:
         _Galileo.sclk_loaded = True
 
     @staticmethod
-    def tdb_from_sclk(count):
+    def tdb_from_sclk(count, *, filepath=None):
         """Convert a Galileo spacecraft clock count to seconds TDB.
 
         The kernels needed are furnished on the first call through :meth:`load_sclk`, so
@@ -272,6 +273,8 @@ class _Galileo:
                 mod-10 and mod-8), separated by any non-alphanumeric characters, as in
                 the label form "RRRRRRRR.MM" or the SPICE form "RRRRRRRR:MM:S:T".
                 Missing trailing fields are taken as zero.
+            filepath (FCPath, optional): The image file whose count this is, named in an
+                error.
 
         Returns:
             float: The time in seconds TDB.
@@ -279,6 +282,11 @@ class _Galileo:
         Raises:
             OopsValueError: If the count has more than four fields or a field is not an
                 unsigned integer.
+            OopsSpiceError: If the clock kernel cannot convert the count, such as one
+                outside the clock's partitions. Its message is "no time for Galileo clock
+                count '<count>' for <file>: <SPICE error code>", and its cause is the
+                SPICE exception. A failure of the conversion whose message lacks a SPICE
+                error code is raised as it is.
         """
 
         _Galileo.load_sclk()
@@ -289,8 +297,15 @@ class _Galileo:
                                       f'{count!r}')
 
         fields += ['0'] * (4 - len(fields))
-        return cspyce.scs2e(_Galileo.SPACECRAFT_ID,
-                            ':'.join(str(int(field)) for field in fields))
+        try:
+            return cspyce.scs2e(_Galileo.SPACECRAFT_ID,
+                                ':'.join(str(int(field)) for field in fields))
+        except oops.OopsSpiceError.CSPYCE_ERRORS as err:
+            if not oops.OopsSpiceError.is_spice_error(err):
+                raise
+            raise oops.OopsSpiceError.from_spice_error(
+                err, description=f'no time for Galileo clock count {count!r}',
+                filepath=filepath) from err
 
     ######################################################################################
     # Initialize the kernel lists

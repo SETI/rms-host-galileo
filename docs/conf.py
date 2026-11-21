@@ -118,14 +118,18 @@ intersphinx_mapping = {
 nitpicky = True
 
 # The only cross-references that cannot resolve are the informal type words this
-# project's docstrings use to describe what an argument accepts. They name no Python
-# object, so there is nothing for Sphinx to link them to. Anything that does name a real
-# object is expected to resolve, so do not add entries here for symbols we own or for
-# third-party classes with an intersphinx inventory; fix the reference instead.
+# project's docstrings use to describe what an argument accepts. They are plain words
+# rather than the names of Python objects, so Sphinx cannot link them. Anything that does
+# name a real object is expected to resolve, so do not add entries here for symbols we
+# own or for third-party classes with an intersphinx inventory; fix the reference
+# instead.
 nitpick_ignore_regex = [
     # Napoleon splits a type such as "(bool, optional)" on the comma and looks up each
     # piece, so the trailing "optional" of every optional parameter arrives here.
     (r'py:class', r'optional'),
+    # rms-oops 0.5.0 adds OopsSpiceError, but its published documentation does not have
+    # it yet. Remove this entry once rms-oops 0.5.0 is released and documented.
+    (r'py:exc', r'oops\.OopsSpiceError'),
 ]
 
 # MyST-Parser settings

@@ -9,13 +9,14 @@ description = "Galileo mission host (SSI) for the OOPS observation geometry tool
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "cspyce>=2.3.2",          # 2.3.2 is the first with Python 3.13 wheels
+  "cspyce>=2.3.2",
   "numpy>=2.0",
-  "rms-filecache>=2.0.3",
-  "rms-julian>=3.0.2",      # 3.0.2 drops pyparsing's deprecated camelCase API
-  "rms-oops>=0.4.0",        # 0.4.0 adds the oops.Host API; also provides spicedb
-  "rms-pdsparser>=2.3.0",   # 2.3.0 adds as_dict
-  "rms-vicar>=1.4.0",       # 1.4.0 adds as_dict
+  "rms-filecache>=3.0.0",
+  "rms-julian>=3.0.2",
+  "rms-oops @ git+https://github.com/SETI/rms-oops@rf_261118_oops_spice_error",
+  "rms-pdsparser>=2.4.1",
+  "rms-pdstable>=1.2.0",
+  "rms-vicar>=1.4.0",
 ]
 license = "Apache-2.0"
 authors = [
@@ -59,7 +60,7 @@ dev = [
   "pytest>=7.0",
   "pytest-cov>=4.0",
   "pytest-xdist>=3.8.0",
-  "ruff>=0.8",
+  "ruff>=0.10",
   # "bandit[toml]>=1.8",
   "pyroma>=4.2",
   # "vulture>=2.14",
@@ -77,7 +78,7 @@ pythonpath = [
   "src"
 ]
 testpaths = ["tests"]
-addopts = ["-n", "auto", "--cov=src/host_galileo", "--strict-markers", "--strict-config"]
+addopts = ["--cov=src/host_galileo", "--strict-markers", "--strict-config"]
 markers = []
 filterwarnings = [
   "error",
@@ -123,14 +124,15 @@ strict = true
 # every other module is excluded from discovery; the override below keeps mypy from
 # following an import into one of them.
 exclude = [
-  'host_galileo/oops/(_galileo|ssi)\.py$',
+  'host_galileo/oops/(_galileo|_ssi_labels|ssi)\.py$',
 ]
 
 # src is deliberately unannotated (see .claude/rules/python.md). The published type
 # information lives in the stubs of host_galileo and host_galileo.oops; every other module
 # has no stub, so mypy treats what the tests import from it as Any.
 [[tool.mypy.overrides]]
-module = ["host_galileo._version", "host_galileo.oops._galileo", "host_galileo.oops.ssi"]
+module = ["host_galileo._version", "host_galileo.oops._galileo",
+          "host_galileo.oops._ssi_labels", "host_galileo.oops.ssi"]
 follow_imports = "skip"
 ignore_errors = true
 
