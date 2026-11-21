@@ -284,7 +284,8 @@ class GalileoSSI(oops.Host):
             oops.host.PdsHostError: If none of the fast, strict, and loose parsers can
                 read the PDS3 label, or if it has no IMAGE pointer.
             oops.host.VicarHostError: If the VICAR header or image cannot be parsed,
-                including an image file shorter than its header says.
+                including an image file shorter than its header says, or if the image's
+                array has more than one band.
             oops.host.HostFormatError: If no label read gives the exposure duration, the
                 telemetry format, or a time (IMAGE_TIME, or the spacecraft clock count
                 and frame duration), if the telemetry format is not one of SSI's, if the
@@ -335,7 +336,7 @@ class GalileoSSI(oops.Host):
                 header = (fileinfo.label if filepath is None
                           else GalileoSSI._read_vicar_header(filepath))
                 if not astrometry:
-                    data = fileinfo.data_2d
+                    data = GalileoSSI._array_2d(fileinfo, filepath)
             else:
                 header = fileinfo
                 if not astrometry:
@@ -503,7 +504,8 @@ class GalileoSSI(oops.Host):
 
         Raises:
             oops.host.VicarHostError: If the file is not a valid VICAR image, including
-                one whose array is shorter than its header says.
+                one whose array is shorter than its header says, or if its array has
+                more than one band.
             OSError: If the file cannot be retrieved or read.
         """
 
@@ -514,7 +516,29 @@ class GalileoSSI(oops.Host):
             vicar = VicarImage(local, strict=False)
         except (VicarError, ValueError) as err:
             raise oops.host.VicarHostError(f'{err}: {filepath}') from err
-        return (vicar.data_2d, local)
+        return (GalileoSSI._array_2d(vicar, filepath), local)
+
+    @staticmethod
+    def _array_2d(image, filepath):
+        """The array of a VICAR image, in two dimensions.
+
+        Parameters:
+            image (VicarImage): The image.
+            filepath (FCPath | None): The image file, for the message; None if the image
+                has no file path.
+
+        Returns:
+            numpy.ndarray: The array.
+
+        Raises:
+            oops.host.VicarHostError: If the array has more than one band.
+        """
+
+        try:
+            return image.data_2d
+        except VicarError as err:
+            raise oops.host.VicarHostError(str(err) if filepath is None
+                                           else f'{err}: {filepath}') from err
 
     @staticmethod
     def from_index(filepath, *, supplement=oops.Host.SUPPLEMENT, label=None,
@@ -639,9 +663,10 @@ class GalileoSSI(oops.Host):
             image of the Jupiter tour has the version 1.1 of the product labels, where
             the current indexes write 1.0. NTV_SAT_TIME_FROM_CLOSEST_APR is given under
             the labels' name, NTV_SAT_TIME_FROM_CLOSEST_APRH.
-            The C kernels are not checked for pointing when the Snapshot is built. For an
-            image whose pointing they cannot supply, the default frame raises
-            oops.OopsSpiceError when it is evaluated.
+            The C kernels are checked for pointing when the Snapshot is built, but a
+            failed check does not raise: for an image whose pointing they cannot supply,
+            the default frame raises oops.OopsSpiceError when it is evaluated. A `frame`
+            override is not checked.
             `filepath`, `basename`, and `image_url` name the image file, as a
             full path or URL: the row's FILE_SPECIFICATION_NAME, with the label's
             extension ".LBL" replaced by ".IMG" in the same case, in the volume directory
@@ -659,11 +684,11 @@ class GalileoSSI(oops.Host):
                 table has. With `row_dicts`, `filter` is checked against the first row:
                 at call time if `row_dicts` is a sequence, and when the iteration reads
                 the first row if it is an iterator.
-            oops.host.HostIndexError: At call time, if `supplement` is None while
-                `row_dicts` is not given; if `supplement` is `oops.Host.SUPPLEMENT` and
-                the name of `filepath` contains no "_index"; if either label does not
-                describe a table that can be read; or if a table lacks
-                FILE_SPECIFICATION_NAME. When the iteration
+            oops.host.HostIndexError: At call time, if `supplement` is None or empty
+                while `row_dicts` is not given; if `supplement` is
+                `oops.Host.SUPPLEMENT` and the name of `filepath` contains no "_index";
+                if either label does not describe a table that can be read; or if a
+                table lacks FILE_SPECIFICATION_NAME. When the iteration
                 reaches a row, if the index row and the supplement row in the same
                 position give different files, or if the supplement ends before the
                 index; at the end of a table file that holds fewer rows than its label
@@ -687,7 +712,9 @@ class GalileoSSI(oops.Host):
             OSError: At call time, if the label of `filepath` or of the supplement does
                 not exist or cannot be read (FileNotFoundError for a missing
                 supplement). When the iteration starts, if a table file does not exist or
-                cannot be read.
+                cannot be read; at call time for the index table, if the index label
+                lacks INSTRUMENT_HOST_NAME and INSTRUMENT_ID, so that the first row is
+                read to recognize the index.
         """
 
         oops.Host._check_select(select, unit='row of a Galileo SSI index')
@@ -696,9 +723,9 @@ class GalileoSSI(oops.Host):
         # that they read the same on every platform and from either entry point
         index_path = FCPath(filepath)
 
-        # The supplement is required, so None is refused rather than taken to mean "read
-        # the index alone"
-        if row_dicts is None and supplement is None:
+        # The supplement is required, so None and the empty path are refused rather than
+        # taken to mean "read the index alone", as oops takes them
+        if row_dicts is None and (supplement is None or supplement == ''):
             raise oops.host.HostIndexError(f'Galileo SSI index needs its supplemental '
                                            f'index: {index_path}')
 

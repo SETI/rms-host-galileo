@@ -1138,6 +1138,28 @@ def test_truncated_image(tmp_path: pathlib.Path) -> None:
         GalileoSSI.from_file(path)
 
 
+def two_band_image() -> vicar.VicarImage:
+    """An SSI image whose array has two bands, which an SSI image never has."""
+
+    vic = vicar.VicarImage.from_array(np.stack([image_array(), image_array()]))
+    for (key, value) in _VICAR_LABEL.items():
+        vic[key] = value
+    return vic
+
+
+def test_image_with_two_bands(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / 'C0349632100R.IMG'
+    two_band_image().write_file(path)
+    with pytest.raises(oops.host.VicarHostError,
+                       match=r'is not 2-D: .*C0349632100R\.IMG$'):
+        GalileoSSI.from_file(path)
+
+
+def test_parsed_image_with_two_bands() -> None:
+    with pytest.raises(oops.host.VicarHostError, match=r'is not 2-D$'):
+        GalileoSSI.from_file(two_band_image())
+
+
 @pytest.mark.parametrize('parsed', ['label', 'vicar'])
 def test_from_file_rejects_another_hosts_parsed_content(tmp_path: pathlib.Path,
                                                         parsed: str) -> None:
@@ -1663,7 +1685,7 @@ def test_from_index_reads_no_table_at_call_time(tmp_path: pathlib.Path) -> None:
     for table in tmp_path.glob('*.tab'):
         table.unlink()
     snapshots = GalileoSSI.from_index(index)
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(FileNotFoundError, match=r'GO_0017_index\.tab'):
         next(snapshots)
 
 
@@ -1820,7 +1842,9 @@ def test_from_index_parses_the_index_label_once(tmp_path: pathlib.Path,
         return parse(filepath, *args, **kwargs)
 
     monkeypatch.setattr(oops.Host, '_parse_index_label', spy)
-    GalileoSSI.from_index(index)
+    snapshots = GalileoSSI.from_index(index)
+    assert parsed.count(FCPath(index)) == 1
+    assert len(list(snapshots)) == 3
     assert parsed.count(FCPath(index)) == 1
 
 
@@ -1931,6 +1955,7 @@ def test_from_index_iterates_given_rows_lazily(tmp_path: pathlib.Path) -> None:
             yield row
 
     snapshots = GalileoSSI.from_index(index, row_dicts=rows())
+    assert taken == []
     next(snapshots)
     assert taken == ['J0/OPNAV/C0346405900R.LBL']
 
@@ -1999,6 +2024,15 @@ def test_from_index_refuses_no_supplement(tmp_path: pathlib.Path) -> None:
                        match=r'^Galileo SSI index needs its supplemental index: '
                              + re.escape(str(FCPath(index))) + '$'):
         GalileoSSI.from_index(index, supplement=None)
+
+
+# oops takes an empty path to mean "read the index alone"
+def test_from_index_refuses_an_empty_supplement(tmp_path: pathlib.Path) -> None:
+    index = write_volume(tmp_path)
+    with pytest.raises(oops.host.HostIndexError,
+                       match=r'^Galileo SSI index needs its supplemental index: '
+                             + re.escape(str(FCPath(index))) + '$'):
+        GalileoSSI.from_index(index, supplement='')
 
 
 def test_from_index_rows_need_no_supplement(tmp_path: pathlib.Path) -> None:

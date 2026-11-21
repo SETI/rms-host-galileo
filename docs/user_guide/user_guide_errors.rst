@@ -16,10 +16,11 @@ Reading an image file
     (see :doc:`user_guide_geometry`). The message reads "no Galileo SSI pointing at
     <time> for <image file>: <code>", ending with the SPICE error code, such as
     ``SPICE(CKINSUFFDATA)``; <time> is that time without the seconds of an ``F``
-    ``timeshift``. It is never raised when the caller supplies the pointing with the
-    ``frame`` override. The same class is raised
-    when the time must come from the clock count and the clock kernel cannot convert it;
-    that message begins "no time for Galileo clock count".
+    ``timeshift``. The pointing is not checked when the caller supplies it with the
+    ``frame`` override, so this message never appears then. The same class is raised,
+    with or without the ``frame`` override, when the time must come from the clock count
+    and the clock kernel cannot convert it; that message begins "no time for Galileo
+    clock count".
 
 :exc:`~oops.host.HostFormatError`
     No label read gives the exposure duration, the telemetry format, or a time
@@ -35,7 +36,7 @@ Reading an image file
 
 :exc:`~oops.host.VicarHostError`
     The VICAR header or image cannot be read, including an image file that is shorter
-    than its header says.
+    than its header says, and an image whose array has more than one band.
 
 :exc:`~oops.host.WrongHostError`
     The file, or the parsed label or image passed in, is not of a Galileo SSI image.
@@ -60,7 +61,7 @@ Reading a PDS3 index
 called:
 
 :exc:`~oops.host.HostIndexError`
-    ``supplement`` is None and ``row_dicts`` is not given; the index's file name
+    ``supplement`` is None or empty and ``row_dicts`` is not given; the index's file name
     lacks the ``_index`` from which to find the supplement; a label does not describe a
     table that can be read; or a table lacks ``FILE_SPECIFICATION_NAME``.
 
@@ -86,8 +87,11 @@ called:
     The label of the index or of a named supplement does not exist or cannot be read.
 
 A table file that does not exist or cannot be read raises :exc:`OSError` when the
-iteration starts. These errors are raised when the iteration reaches the row, and the
-iteration ends there:
+iteration starts. The exception is an index whose label does not give
+``INSTRUMENT_HOST_NAME`` and ``INSTRUMENT_ID``, as in the metadata tree's versions
+before v4: the call reads the index's first row to recognize it as an SSI index, so a
+missing or unreadable index table raises :exc:`OSError` at the call. These errors are
+raised when the iteration reaches the row, and the iteration ends there:
 
 :exc:`~oops.host.HostIndexError`
     The index row and the supplement row in the same position give different images; the
@@ -113,6 +117,7 @@ duration (see :doc:`user_guide_index`).
 :exc:`~oops.OopsTypeError`
     A range in ``filter`` cannot be compared with the row's value.
 
-Building a row's Snapshot does not check the pointing. When the C kernels lack the
-pointing of an image, its Snapshot's frame raises :exc:`oops.OopsSpiceError`, with the
-message described above, each time the frame is evaluated.
+Building a row's Snapshot checks the pointing, but a failed check does not raise. When
+the C kernels lack the pointing of an image, the Snapshot's default frame raises
+:exc:`oops.OopsSpiceError`, with the message described above, each time the frame is
+evaluated. A frame that the caller supplies with the ``frame`` override is not checked.

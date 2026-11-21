@@ -141,8 +141,10 @@ type whichever label it came from.
 ``header_dict``
     Every parameter of the VICAR header as the file writes it, present only when the
     image file was read. A normal read and an astrometry read give the same values,
-    including ``HOST`` and ``BHOST``, the machines that wrote the file. A parameter that
-    occurs more than once, such as the ``TASK`` of each step of the processing history,
+    including ``HOST`` and ``BHOST``, the machines that wrote the file. The one
+    exception is a parsed image passed in without a file path: the host has only the
+    header that the image holds, whose ``HOST`` and ``BHOST`` give the machine that read
+    it (see :doc:`user_guide_files`). A parameter that occurs more than once, such as the ``TASK`` of each step of the processing history,
     is keyed by its name and its occurrence counted from zero: ``TASK[0]``, ``TASK[1]``,
     and so on.
 

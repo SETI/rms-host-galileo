@@ -10,7 +10,10 @@ images one at a time.
 It returns an iterator, which gives the Snapshots row by row, in the order of the index.
 The call itself checks the arguments and reads the PDS3 labels of the index and its
 supplement, so a wrong argument or a label that cannot be read raises an error at once.
-The rows of the two tables are read as the iteration goes on, a few at a time, and each
+An index label that does not give ``INSTRUMENT_HOST_NAME`` and ``INSTRUMENT_ID``, as in
+the metadata tree's versions before v4, does not show that the index is an SSI index,
+so the call also reads the first row of the index to recognize it. The rows of the two
+tables are read as the iteration goes on, a few at a time, and each
 row's Snapshot is built when the iteration reaches that row. The memory used stays about
 the same however long the index is when the installed OOPS frees the frames and paths
 built for each row once its Snapshot is gone; with a version that keeps them, the
@@ -82,7 +85,11 @@ Other arguments
     takes the rows one at a time as the iteration needs them. The host then reads
     neither table, and ``supplement`` is not used. It still reads the index's PDS3
     label, unless ``label`` is given, because the label tells whether the table writes
-    the compression ratios in rotated columns (see below).
+    the compression ratios in rotated columns (see below). A value that a table declares
+    as its column's null or not-applicable constant, such as an
+    ``ICT_DESPIKE_THRESHOLD`` of -1, is left out only when the row also carries the mask
+    that the table reader adds for it, under the column's name followed by ``_mask``. A
+    row without that mask keeps the value.
 
 ``filter``
     A dictionary of column names and the values to keep. A row is kept when each column
@@ -138,11 +145,14 @@ the value in ``ENCODING_COMPRESSION_RATIO`` is the image's maximum ratio, the va
 of 5.428, while the index gives 5.428, 3.758, and 3.03. Only the indexes of GO_0017
 through GO_0023, and the cumulative GO_0999, give nonzero ratios. Until the indexes are
 corrected, the host gives each value under the name of the ratio it holds, as the product
-label does. It decides this once for each index, from the order in which its PDS3 label
-lists the three columns: every SSI index label lists them in the same order, in every
-version of the metadata tree, however recently it was made. An index whose label lists
-the columns in another order, as a corrected one that renames them does, is taken to be
-corrected, and its values keep their column names.
+label does. It decides this once for each index, from the order of the three columns'
+bytes in the row, which their ``START_BYTE`` values in the PDS3 label give: every SSI
+index label places them in the same order, in every version of the metadata tree,
+however recently it was made. An index whose label places the columns in another
+order, as a corrected one that renames them does, is taken to be corrected, and its
+values keep their column names. The order in which the label lists the columns does
+not matter, so a corrected label must change their names or their ``START_BYTE``
+values, not only the order of their definitions.
 
 The same indexes give every image of the Jupiter tour the data set version 1.0, as in
 ``GO-J/JSA-SSI-2-REDR-V1.0``, while every product label gives version 1.1. The host
@@ -156,10 +166,12 @@ telemetry format comes from the supplement, so a row passed in ``row_dicts`` wit
 supplement's columns gets the full field of view.
 
 Every row gives a Snapshot, including a row whose exposure is zero and a row whose
-pointing the C kernels lack. The pointing is not checked when the Snapshot is built. If
-the C kernels lack the pointing of an image, its Snapshot's frame raises
-:exc:`oops.OopsSpiceError` whenever it is evaluated, with the same message that
-:meth:`~host_galileo.oops.ssi.GalileoSSI.from_file` gives (see :doc:`user_guide_errors`).
+pointing the C kernels lack. The pointing is checked when the Snapshot is built, but a
+failed check does not raise. If the C kernels lack the pointing of an image, its
+Snapshot's default frame raises :exc:`oops.OopsSpiceError` whenever it is evaluated,
+with the same message that :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file` gives
+(see :doc:`user_guide_errors`). A frame that the caller supplies with the ``frame``
+override is not checked, and is used as it is.
 
 File paths
 ==========
@@ -176,8 +188,10 @@ the location of the index:
 
 The row's ``VOLUME_ID`` and file specification complete the path. Reading an index does
 not retrieve the image files, so no Snapshot has ``abspath``, even when the image file is
-on the local disk or already in the local cache. Reading an index leaves the file system
-as it is, even when the volumes are not there.
+on the local disk or already in the local cache. The paths are formed without creating
+any directory, even when the volumes are not there. Only the SPICE kernels that the
+host always loads can reach the local cache, when they are remote, on the first call
+of the host.
 
 Reading an index through oops.Host
 ==================================

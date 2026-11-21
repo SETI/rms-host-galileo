@@ -57,8 +57,10 @@ read its array: a normal read of the label or the image file. For a remote file 
 the path of the copy in the local cache. An astrometry read does not read the array, so
 it never gives ``abspath``, even when the image file is on the local disk or already in
 the local cache. Neither does a :class:`~vicar.VicarImage` passed in, whose array was
-read before the call. Opening an image leaves the directories of the file system as
-they are.
+read before the call. The path subfields are formed without creating any directory. A
+normal read of a remote image stores its copy in the local cache, and when the SPICE
+kernels are remote, the first call of the host retrieves the kernels that it always
+loads into a local cache.
 
 Parsed input
 ============
@@ -79,7 +81,7 @@ The ``header_dict`` subfield holds the VICAR header as the file writes it. A
 :class:`~vicar.VicarImage` sets its ``HOST`` and ``BHOST`` to the machine that read it,
 so when a :class:`~vicar.VicarImage` that has a file path is passed in, the host reads
 the header again from that file. A :class:`~vicar.VicarImage` made by
-``VicarImage.from_file()`` lacks the path of its file, so the host has only the header
+:meth:`vicar.VicarImage.from_file` lacks the path of its file, so the host has only the header
 that it holds, and its ``header_dict`` gives the reading machine as ``HOST`` and
 ``BHOST``.
 

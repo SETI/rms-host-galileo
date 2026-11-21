@@ -84,11 +84,15 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   number in `^IMAGE`: 52 GO_0019 labels put it a record early, and the label of GO_0018
   E4/EUROPA/C0374685452R describes the wrong layout. Those product labels are part of
   the holdings, which stay as they are.
-  `header_dict` always comes from a `VicarLabel` (`_read_vicar_header`), never from a
-  `VicarImage`, which replaces the file's `HOST` and `BHOST` with the reading machine's;
-  a `VicarImage` passed in with a file path has its header read again from the file.
-  This stays until rms-vicar keeps the header as the file writes it (the issue is cited
-  in the comment in `from_file()`).
+  Whenever a file path is known, `header_dict` comes from a `VicarLabel` read from the
+  file (`_read_vicar_header`), never from a `VicarImage`, which replaces the file's
+  `HOST` and `BHOST` with the reading machine's; a `VicarImage` passed in with a file
+  path has its header read again from the file. A `VicarImage` passed in without one
+  (as `VicarImage.from_file()` makes it) gives only the header it holds,
+  `fileinfo.label`, so its `HOST` and `BHOST` are the reading machine's. This stays
+  until rms-vicar keeps the header as the file writes it (the issue is cited in the
+  comment in `from_file()`). The array of a `VicarImage` with more than one band raises
+  `VicarHostError` (`_array_2d`).
   Parsed content without a file path leaves out the path subfields, and a full read of a
   `Pds3Label` or `VicarLabel` without one raises `HostFormatError` (`_known_path`).
   `from_file()` refuses `select` other than None (`oops.Host._check_select`), as
@@ -220,13 +224,15 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   Node metadata tree, else the index's directory), and `oops.Host._index_file_path()`
   joins the row's `VOLUME_ID` and file specification to it (design D5).
   `_detect_in_index()` decides from the label's `INSTRUMENT_HOST_NAME` and
-  `INSTRUMENT_ID`; for a label without them it returns None, so that the host is
-  identified from the first row. A table value that `PdsTable` cannot read as
+  `INSTRUMENT_ID`; for a label without them (the metadata versions before v4) it
+  returns None, so that the host is identified from the first row, which both
+  `oops.Host.from_index()` and `_index_rows()` read at call time. A table value that `PdsTable` cannot read as
   its column's number is yielded as a string with a UserWarning, not an error of the
   table; the docs say what oops does with malformed rows rather than promising a check.
 - `GalileoSSI.from_index()` returns an iterator. It checks its arguments and reads the
-  labels, then returns a generator that builds each row's Snapshot when the iteration
-  reaches it. It must not be a generator function, which would defer every call-time
+  labels (and the first index row for a label that does not name the host, so a
+  missing index table then raises at the call), then returns a generator that builds
+  each row's Snapshot when the iteration reaches it. It must not be a generator function, which would defer every call-time
   error to the first `next()`.
 - The hosts apply the standard overrides through `oops.Host._apply_overrides()`, passing
   them to `_make_snapshot()` as one `overrides` dict, as rms-host-cassini does.
