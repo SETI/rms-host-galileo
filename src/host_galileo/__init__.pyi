@@ -48,7 +48,7 @@ class GalileoSSI(Host):
     # read gives the exposure, the time, or the telemetry format, and for a full read of
     # parsed content that has no file path. A missing image file behind a label raises
     # FileNotFoundError. select must be None (oops.OopsValueError), and any other keyword
-    # raises oops.OopsTypeError. Unless a frame is given, an image whose pointing the C
+    # raises Python's TypeError. Unless a frame is given, an image whose pointing the C
     # kernels lack raises oops.OopsSpiceError, whose cause is the SPICE exception.
     @staticmethod
     def from_file(  # type: ignore[override]
@@ -63,17 +63,18 @@ class GalileoSSI(Host):
         calibrations: Calibration | list[Calibration] | None = None,
         timeshift: tuple[float, str] | None = None,
         navigation: tuple[float, ...] | None = None, tracker: str | None = None,
-        parallel: Observation | None = None, **kwargs: Any) -> Snapshot: ...
+        parallel: Observation | None = None) -> Snapshot: ...
     # Every row is one Snapshot. The index is the Ring-Moon Systems Node metadata index,
     # read with its supplement. The supplement is required: None raises
     # oops.host.HostIndexError unless row_dicts is given. select must be None
-    # (oops.OopsValueError), and any other keyword raises oops.OopsTypeError. The call
+    # (oops.OopsValueError), and any other keyword raises Python's TypeError. The call
     # reads only the labels; the iterator reads the two
     # tables a few rows at a time, pairs each index row with the supplement row in the
     # same position, builds each row's Snapshot when it reaches the row, and ends at the
     # first row that raises. Rows whose files differ raise oops.host.HostIndexError there.
+    # Host.from_index declares **kwargs, which this method does not take.
     @staticmethod
-    def from_index(
+    def from_index(  # type: ignore[override]
         filepath: str | pathlib.Path | FCPath, *,
         supplement: str | pathlib.Path | FCPath | object | None = ...,
         label: Pds3Label | None = None,
@@ -88,7 +89,7 @@ class GalileoSSI(Host):
         calibrations: Calibration | list[Calibration] | None = None,
         timeshift: tuple[float, str] | None = None,
         navigation: tuple[float, ...] | None = None, tracker: str | None = None,
-        parallel: Observation | None = None, **kwargs: Any) -> Iterator[Snapshot]: ...
+        parallel: Observation | None = None) -> Iterator[Snapshot]: ...
     @staticmethod
     def initialize(*, planets: int | Sequence[int] | None = None, asof: str | None = None,
         irregulars: bool = True) -> None: ...

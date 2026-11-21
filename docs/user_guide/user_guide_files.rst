@@ -52,10 +52,13 @@ A path that ends in ``.lbl``, in any case, is read as a PDS3 label.
 
 The ``filepath``, ``basename``, ``abspath``, and ``image_url`` subfields always give the
 image file, also when the input is the label. ``abspath`` is the image file's path on
-the local disk, so it is present only when the file is local or is already in the local
-cache of a remote file. After an astrometry read of a remote label, the image file has
-not been retrieved, so ``abspath`` is absent unless an earlier read put the file in the
-cache. Opening an image leaves the directories of the file system as they are.
+the local disk, so it is present only when the read itself fetched the image file to
+read its array: a normal read of the label or the image file. For a remote file it is
+the path of the copy in the local cache. An astrometry read does not read the array, so
+it never gives ``abspath``, even when the image file is on the local disk or already in
+the local cache. Neither does a :class:`~vicar.VicarImage` passed in, whose array was
+read before the call. Opening an image leaves the directories of the file system as
+they are.
 
 Parsed input
 ============
@@ -112,8 +115,8 @@ These options are particular to the Galileo host:
 The standard OOPS overrides, ``target``, ``lightsource``, ``path``, ``frame``,
 ``cadence``, ``fov``, ``calibrations``, ``timeshift``, ``navigation``, ``tracker``, and
 ``parallel``, replace what the host would otherwise build. They are listed with
-:meth:`~host_galileo.oops.ssi.GalileoSSI.from_file`. Any other keyword raises
-:exc:`~oops.OopsTypeError`, so that a misspelled argument is caught.
+:meth:`~host_galileo.oops.ssi.GalileoSSI.from_file`. Any other keyword raises Python's
+:exc:`TypeError`, so that a misspelled argument is caught.
 
 Reading a label through oops.Host
 =================================

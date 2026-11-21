@@ -119,7 +119,7 @@ class GalileoSSI(oops.Host):
                   pds3_options=None, astrometry=False, select=None, target=None,
                   lightsource=None, path=None, frame=None, cadence=None, fov=None,
                   calibrations=None, timeshift=None, navigation=None, tracker=None,
-                  parallel=None, **kwargs):
+                  parallel=None):
         """A Snapshot object based on a given Galileo SSI image file.
 
         By default, the image and its field of view are trimmed to the label's cutout
@@ -223,7 +223,6 @@ class GalileoSSI(oops.Host):
                 time, different frame and FOV) relative to which this Observation has a
                 fixed offset. Note that no more than one of `parallel` and `tracker` can
                 be specified.
-            **kwargs: Any other keyword argument raises an error.
 
         Returns:
             Snapshot: The observation, with `data` inserted unless `astrometry` is True,
@@ -261,10 +260,11 @@ class GalileoSSI(oops.Host):
               `spice_frame_id`.
             - `filepath`, `basename`, `abspath`, and `image_url`, which name the image
               file, also when `fileinfo` is its PDS3 label, and are absent when the
-              parsed content given has no file path. `abspath` is given only when the
-              image file is local or already in the local cache, so an astrometry read
-              of a remote PDS3 label, which never fetches the image, gives it only if an
-              earlier read put the image in the cache.
+              parsed content given has no file path. `abspath` is given only when this
+              call retrieved the image file to read its array, and is then the local path
+              of the file or of its copy in the local cache. An astrometry read, which
+              does not read the array, never gives it, nor does a VicarImage passed in,
+              whose array was read before the call.
 
         Raises:
             oops.OopsSpiceError: If no `frame` is given and the C kernels lack the
@@ -277,7 +277,7 @@ class GalileoSSI(oops.Host):
                 "no Galileo SSI pointing at <time> for <image file>: <SPICE error code>",
                 where <time> is that time without the seconds of an "F" timeshift, and
                 the cause of either is the SPICE exception.
-            oops.OopsTypeError: If a keyword argument is not one of those listed.
+            TypeError: If a keyword argument is not one of those listed.
             oops.OopsValueError: If `select` is not None, or if `pds3_options` names a
                 parser method other than fast, strict, and loose that the parser rejects,
                 or another invalid option.
@@ -299,8 +299,6 @@ class GalileoSSI(oops.Host):
             OSError: If a file cannot be read.
         """
 
-        # A mistaken keyword, such as "astrometric", must not be dropped silently
-        GalileoSSI._check_keywords('from_file', kwargs)
         oops.Host._check_select(select, unit='Galileo SSI image')
 
         GalileoSSI.initialize()  # define everything the first time through; use defaults
@@ -318,17 +316,19 @@ class GalileoSSI(oops.Host):
         # VicarImage, which replaces the HOST and BHOST of the file with the reading
         # machine's; a VicarImage passed in with a file path has its header read again
         # from the file. This stays until rms-vicar keeps the header as the file writes
-        # it (SETI/rms-vicar#34).
+        # it (SETI/rms-vicar#34). Only a read that retrieves the image file here, for its
+        # array, knows a local path that exists, so only it gives abspath.
         label_dict = None
         header = None
         data = None
+        abspath = None
         if isinstance(fileinfo, Pds3Label):
             label_dict = _ssi_labels.label_json(fileinfo.as_dict())
             filepath = GalileoSSI._image_path(fileinfo, find=not astrometry)
             if not astrometry:
                 filepath = GalileoSSI._known_path(filepath, 'PDS3 label')
                 header = GalileoSSI._read_vicar_header(filepath)
-                data = GalileoSSI._read_vicar_image(filepath).data_2d
+                (data, abspath) = GalileoSSI._read_vicar_image(filepath)
         else:
             filepath = None if fileinfo.filepath is None else FCPath(fileinfo.filepath)
             if isinstance(fileinfo, VicarImage):
@@ -340,7 +340,7 @@ class GalileoSSI(oops.Host):
                 header = fileinfo
                 if not astrometry:
                     filepath = GalileoSSI._known_path(filepath, 'VICAR header')
-                    data = GalileoSSI._read_vicar_image(filepath).data_2d
+                    (data, abspath) = GalileoSSI._read_vicar_image(filepath)
 
         header_dict = None if header is None else _ssi_labels.header_json(header)
 
@@ -362,8 +362,8 @@ class GalileoSSI(oops.Host):
             'parallel'    : parallel,
         }
 
-        snapshot = GalileoSSI._make_snapshot(dict_, filepath=filepath, data=data,
-                                             full_fov=full_fov,
+        snapshot = GalileoSSI._make_snapshot(dict_, filepath=filepath, abspath=abspath,
+                                             data=data, full_fov=full_fov,
                                              return_all_planets=return_all_planets,
                                              overrides=overrides, check_pointing=True)
         if label_dict is not None:
@@ -489,50 +489,56 @@ class GalileoSSI(oops.Host):
 
     @staticmethod
     def _read_vicar_image(filepath):
-        """The VICAR image in a file, with its header and its full array.
+        """The full array of a VICAR image file, and the local path it was read from.
+
+        The file is retrieved first, so that a remote file has a local copy whose path
+        exists when it is returned.
 
         Parameters:
             filepath (FCPath): The image file.
 
         Returns:
-            VicarImage: The image, whose array is located by its own header.
+            tuple[numpy.ndarray, pathlib.Path]: The array, located by the file's own
+            header, and the local path that ``FCPath.retrieve()`` returned.
 
         Raises:
             oops.host.VicarHostError: If the file is not a valid VICAR image, including
                 one whose array is shorter than its header says.
-            OSError: If the file cannot be read.
+            OSError: If the file cannot be retrieved or read.
         """
+
+        local = FCPath(filepath).retrieve()
 
         # A truncated array fails to take the header's shape with a bare ValueError
         try:
-            vicar = VicarImage(filepath, strict=False)
+            vicar = VicarImage(local, strict=False)
         except (VicarError, ValueError) as err:
             raise oops.host.VicarHostError(f'{err}: {filepath}') from err
-        return vicar
+        return (vicar.data_2d, local)
 
     @staticmethod
     def from_index(filepath, *, supplement=oops.Host.SUPPLEMENT, label=None,
                    row_dicts=None, pds3_options=None, filter=None, full_fov=False,
                    return_all_planets=False, select=None, target=None, lightsource=None,
                    path=None, frame=None, cadence=None, fov=None, calibrations=None,
-                   timeshift=None, navigation=None, tracker=None, parallel=None,
-                   **kwargs):
+                   timeshift=None, navigation=None, tracker=None, parallel=None):
         """An iterator over Snapshots, one for each row of a Galileo SSI index file.
 
         It reads a Ring-Moon Systems Node metadata index and its supplement. The call
         itself checks the arguments and reads the labels of the index and its
         supplement, so that a wrong call fails at once. The rows of the two tables are
         then read as the iteration proceeds, a few at a time, and each row's Snapshot is
-        built when the iteration reaches that row, so the memory used stays the same
-        however long the index is. An error in a row is raised when the iteration
+        built when the iteration reaches that row. The memory used stays the same
+        however long the index is only with an rms-oops that frees the frames and paths
+        built for each row once its Snapshot is gone; with one that keeps them, it grows
+        a little with each row. An error in a row is raised when the iteration
         reaches it, after every earlier row has been yielded (except for a row longer
         than its label says, as described below), and the iteration ends there;
         `filter` can leave such a row out.
 
         Every SSI index lists its files in the same order as its supplement, so the two
         tables are read in step and each index row is paired with the supplement row in
-        the same position. The two rows must give the same VOLUME_ID and
-        FILE_SPECIFICATION_NAME.
+        the same position. The two rows must give the same FILE_SPECIFICATION_NAME.
 
         Parameters:
             filepath (str | pathlib.Path | FCPath): The full path to the PDS label of a
@@ -602,7 +608,6 @@ class GalileoSSI(oops.Host):
                 time, different frame and FOV) relative to which this Observation has a
                 fixed offset. Note that no more than one of `parallel` and `tracker` can
                 be specified.
-            **kwargs: Any other keyword argument raises an error.
 
         Returns:
             collections.abc.Iterator[Snapshot]: One observation for every row of the
@@ -610,8 +615,8 @@ class GalileoSSI(oops.Host):
             exposure, each with subfields `dict`, `host`, `instrument`, `filter`,
             `time_from_sclk`, `label_target`, `observation_id`, `spice_kernels`,
             `filepath`, `basename`, `image_url`, `spice_to_frame`, `spice_frame_name` and
-            `spice_frame_id` inserted, `spacecraft_clock_start_count` if the row gives
-            it, and `abspath` if the image file is local or already in the local cache.
+            `spice_frame_id` inserted, and `spacecraft_clock_start_count` if the row gives
+            it. No row has `abspath`, because the image files are not retrieved.
             `dict` is the row, merged with its row of the supplement, with every value as
             a Python str, int, float, or list. A value that stands for "no value" is left
             out: a PDS3 null such as UNK, a numeric -999, the placeholder a column writes
@@ -637,7 +642,7 @@ class GalileoSSI(oops.Host):
             The C kernels are not checked for pointing when the Snapshot is built. For an
             image whose pointing they cannot supply, the default frame raises
             oops.OopsSpiceError when it is evaluated.
-            `filepath`, `basename`, `image_url`, and `abspath` name the image file, as a
+            `filepath`, `basename`, and `image_url` name the image file, as a
             full path or URL: the row's FILE_SPECIFICATION_NAME, with the label's
             extension ".LBL" replaced by ".IMG" in the same case, in the volume directory
             named by its VOLUME_ID. The volume directories are found from the location of
@@ -646,9 +651,9 @@ class GalileoSSI(oops.Host):
             otherwise in the index's own directory.
 
         Raises:
-            oops.OopsTypeError: At call time, if a keyword argument is not one of those
-                listed. When the iteration reaches a row, if a range in `filter` cannot
-                be compared with the row's value.
+            TypeError: At call time, if a keyword argument is not one of those listed.
+            oops.OopsTypeError: When the iteration reaches a row, if a range in `filter`
+                cannot be compared with the row's value.
             oops.OopsValueError: At call time, if `select` is not None, if a value in
                 `pds3_options` is invalid, or if `filter` uses a column that neither
                 table has. With `row_dicts`, `filter` is checked against the first row:
@@ -657,12 +662,12 @@ class GalileoSSI(oops.Host):
             oops.host.HostIndexError: At call time, if `supplement` is None while
                 `row_dicts` is not given; if `supplement` is `oops.Host.SUPPLEMENT` and
                 the name of `filepath` contains no "_index"; if either label does not
-                describe a table that can be read; or if a table lacks VOLUME_ID or
+                describe a table that can be read; or if a table lacks
                 FILE_SPECIFICATION_NAME. When the iteration
                 reaches a row, if the index row and the supplement row in the same
                 position give different files, or if the supplement ends before the
                 index; at the end of a table file that holds fewer rows than its label
-                says, after every row it holds; and at the first of the ten rows read
+                says, after every row it holds; and at the first of the 100 rows read
                 with a row longer than the label's row length, none of which is yielded.
                 After the last index row, if the supplement has rows left over or a
                 table file holds more rows than its label says. A value that cannot be
@@ -685,8 +690,6 @@ class GalileoSSI(oops.Host):
                 cannot be read.
         """
 
-        # A mistaken keyword, such as "supplementary", must not be dropped silently
-        GalileoSSI._check_keywords('from_index', kwargs)
         oops.Host._check_select(select, unit='row of a Galileo SSI index')
 
         # The messages name the index as an FCPath, as oops.Host.from_index passes it, so
@@ -715,10 +718,13 @@ class GalileoSSI(oops.Host):
         # "RRRRRRRR:MM:S:T" and the index in the label form "RRRRRRRR.MM", so the default
         # validation, which compares every shared column, would reject every real pair
         # until the index is corrected (rms-data-projects #258, item 4); the pairing's
-        # comparison of VOLUME_ID and FILE_SPECIFICATION_NAME is the only check.
+        # comparison of FILE_SPECIFICATION_NAME is the only check. The key is named,
+        # although it is oops's default, so that a table without the column is refused
+        # at call time instead of being paired without comparing the files.
         rows = GalileoSSI._index_rows(index_path, supplement=supplement, label=label,
                                       row_dicts=row_dicts, pds3_options=pds3_options,
-                                      filter=filter, validate=())
+                                      filter=filter, validate=(),
+                                      file_key='FILE_SPECIFICATION_NAME')
 
         overrides = {
             'target'      : target,
@@ -754,7 +760,7 @@ class GalileoSSI(oops.Host):
         return snapshots()
 
     @staticmethod
-    def _make_snapshot(dict_, filepath, data=None, *, full_fov=False,
+    def _make_snapshot(dict_, filepath, data=None, *, abspath=None, full_fov=False,
                        return_all_planets=False, overrides, default_mode=None,
                        check_pointing=False):
         """A Snapshot built from the merged metadata of an image or a row of an index.
@@ -768,6 +774,9 @@ class GalileoSSI(oops.Host):
                 subfields.
             data (numpy.ndarray, optional): The full image array; None to omit the `data`
                 subfield.
+            abspath (pathlib.Path, optional): The local path of the image file, given only
+                when this call retrieved the file to read its array; None to leave out
+                the `abspath` subfield.
             full_fov (bool, optional): True to keep the full FOV and image; False to trim
                 both to the cutout window.
             return_all_planets (bool, optional): Include kernels for all planets, not just
@@ -883,7 +892,7 @@ class GalileoSSI(oops.Host):
                 description=_NO_POINTING, filepath=filepath, defer=not check_pointing)
 
         # Apply standard overrides, including the path subfields
-        oops.Host._apply_overrides(params, filepath, **overrides)
+        oops.Host._apply_overrides(params, filepath, abspath=abspath, **overrides)
 
         obs = oops.observation.Snapshot(('v', 'u'), **params)
         if data is not None:

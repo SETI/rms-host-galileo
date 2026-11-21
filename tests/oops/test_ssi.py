@@ -604,9 +604,12 @@ def test_from_file_full_fov(tmp_path: pathlib.Path) -> None:
     assert obs.fov is GalileoSSI._FOVS['HIS']
 
 
-def test_from_file_sets_local_paths(tmp_path: pathlib.Path) -> None:
-    obs = GalileoSSI.from_file(write_pds3_image(tmp_path), astrometry=True)
+# A full read retrieves the image file to read its array, so it gives the local path
+@pytest.mark.parametrize('given', ['label', 'image'])
+def test_from_file_sets_local_paths(tmp_path: pathlib.Path, given: str) -> None:
+    label = write_pds3_image(tmp_path)
     image = tmp_path / 'C0349632100R.IMG'
+    obs = GalileoSSI.from_file(label if given == 'label' else image)
     assert obs.abspath == image.resolve()
     assert obs.image_url == image.as_posix()
 
@@ -827,9 +830,7 @@ def test_from_file_rejects_other_hosts(tmp_path: pathlib.Path) -> None:
 
 
 def test_from_file_rejects_an_unknown_keyword(tmp_path: pathlib.Path) -> None:
-    with pytest.raises(oops.OopsTypeError,
-                       match=r"unexpected keyword argument for GalileoSSI\.from_file: "
-                             r"'astrometric'"):
+    with pytest.raises(TypeError, match="unexpected keyword argument 'astrometric'"):
         GalileoSSI.from_file(write_vicar_image(tmp_path), astrometric=True)
 
 
@@ -1092,13 +1093,32 @@ def cache_remote_product(tmp_path: pathlib.Path, *, image: bool) -> FCPath:
     return FCPath(f'{_REMOTE}/C0349632100R.LBL')
 
 
-# abspath names the image file only where it is local or in the cache: an astrometry
-# read of a remote label never fetches it
-@pytest.mark.parametrize('cached', [False, True], ids=['not-cached', 'cached'])
-def test_remote_label_astrometry_abspath(tmp_path: pathlib.Path, cached: bool) -> None:
-    label = cache_remote_product(tmp_path, image=cached)
+# A full read of a remote image file gives the local copy that its retrieval returned
+def test_remote_image_full_read_abspath_is_the_retrieved_copy(
+        tmp_path: pathlib.Path) -> None:
+    cache_remote_product(tmp_path, image=True)
+    image = FCPath(f'{_REMOTE}/C0349632100R.IMG')
+    obs = GalileoSSI.from_file(image)
+    local = cast(pathlib.Path, image.get_local_path(create_parents=False))
+    assert obs.abspath == local.resolve()
+
+
+# An astrometry read does not retrieve the image file, so its Snapshot lacks abspath,
+# even when the image file is local or already in the cache
+@pytest.mark.parametrize('where', ['local', 'cached'])
+def test_label_astrometry_has_no_abspath(tmp_path: pathlib.Path, where: str) -> None:
+    label: pathlib.Path | FCPath = write_pds3_image(tmp_path)
+    if where == 'cached':
+        label = cache_remote_product(tmp_path, image=True)
     obs = GalileoSSI.from_file(label, astrometry=True)
-    assert hasattr(obs, 'abspath') is cached
+    assert not hasattr(obs, 'abspath')
+
+
+# The array of a parsed image passed in was read by the caller, not retrieved by this call
+def test_parsed_image_has_no_abspath(tmp_path: pathlib.Path) -> None:
+    image = vicar.VicarImage(write_vicar_image(tmp_path), strict=False)
+    obs = GalileoSSI.from_file(image)
+    assert not hasattr(obs, 'abspath')
 
 
 def test_label_without_an_image_pointer(tmp_path: pathlib.Path) -> None:
@@ -1612,6 +1632,18 @@ def test_index_and_supplement_are_paired_by_position() -> None:
     assert GalileoSSI.MERGE_SUPPLEMENT_BY_FILE is False
 
 
+# The pairing compares the files of the two rows, so a supplement without them is refused
+# at once rather than paired unchecked
+def test_from_index_needs_the_file_specification_in_the_supplement(
+        tmp_path: pathlib.Path) -> None:
+    columns = [_SUPPLEMENT_COLUMNS[0], *_SUPPLEMENT_COLUMNS[2:]]
+    rows = [(row[0], *row[2:]) for row in _SUPPLEMENT_ROWS]
+    write_table(tmp_path, 'GO_0017_supplemental_index', 'SUPPLEMENTAL_INDEX_TABLE',
+                columns, rows, **_INDEX_KEYWORDS)
+    with pytest.raises(oops.host.HostIndexError, match='FILE_SPECIFICATION_NAME'):
+        GalileoSSI.from_index(write_index(tmp_path))
+
+
 def long_volume(directory: pathlib.Path, count: int) -> pathlib.Path:
     """Write an index and supplement of `count` rows, each a copy of the second row of
     :data:`_INDEX_ROWS` for another image; return the index label's path."""
@@ -1730,23 +1762,26 @@ def test_from_index_rows(tmp_path: pathlib.Path) -> None:
 
 def test_from_index_names_the_image_in_full(tmp_path: pathlib.Path) -> None:
     image = tmp_path / 'GO_0017/G1/GANYMEDE/C0349632100R.IMG'
-    image.parent.mkdir(parents=True)
-    image.write_bytes(b'')
     obs = list(GalileoSSI.from_index(write_volume(tmp_path)))[1]
-    assert (obs.basename, obs.image_url, obs.abspath) == ('C0349632100R.IMG',
-                                                          image.as_posix(),
-                                                          image.resolve())
+    assert (obs.basename, obs.image_url) == ('C0349632100R.IMG', image.as_posix())
 
 
-# An index read leaves the images where they are, so a remote image has abspath only if
-# it is already cached
-def test_from_index_remote_image_abspath_only_when_cached(tmp_path: pathlib.Path) -> None:
-    local = write_index(tmp_path)
-    put_in_cache(f'{_REMOTE}/C0349632100R.IMG', b'')
-    index = 'https://pds.example.org/metadata/GO_0xxx/GO_0017/GO_0017_index.lbl'
+# An index read never retrieves an image file, so no row has an abspath, even when its
+# image file is local or already in the cache
+@pytest.mark.parametrize('where', ['local', 'cached'])
+def test_from_index_has_no_abspath(tmp_path: pathlib.Path, where: str) -> None:
+    local = write_volume(tmp_path)
+    index: pathlib.Path | str = local
+    if where == 'local':
+        image = tmp_path / 'GO_0017/G1/GANYMEDE/C0349632100R.IMG'
+        image.parent.mkdir(parents=True)
+        image.write_bytes(b'')
+    else:
+        put_in_cache(f'{_REMOTE}/C0349632100R.IMG', b'')
+        index = 'https://pds.example.org/metadata/GO_0xxx/GO_0017/GO_0017_index.lbl'
     snapshots = GalileoSSI.from_index(index, row_dicts=index_rows(local),
                                       label=Pds3Label(local))
-    assert [hasattr(obs, 'abspath') for obs in snapshots] == [False, True, False]
+    assert [hasattr(obs, 'abspath') for obs in snapshots] == [False, False, False]
 
 
 # An index whose volumes are absent leaves the file system as it was
@@ -2003,9 +2038,7 @@ def test_from_index_uses_a_given_label(tmp_path: pathlib.Path,
 
 
 def test_from_index_rejects_an_unknown_keyword(tmp_path: pathlib.Path) -> None:
-    with pytest.raises(oops.OopsTypeError,
-                       match=r"unexpected keyword argument for GalileoSSI\.from_index: "
-                             r"'supplementary'"):
+    with pytest.raises(TypeError, match="unexpected keyword argument 'supplementary'"):
         GalileoSSI.from_index(write_volume(tmp_path), supplementary=None)
 
 

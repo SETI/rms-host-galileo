@@ -38,8 +38,9 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   re-signing a public member means updating `host_galileo/__init__.pyi` in the same
   change. The `[tool.mypy] exclude`, the override list in `pyproject.toml` and
   `.stubtest-allowlist` keep it off the stub-less modules (`_galileo.py`,
-  `_ssi_labels.py` and `ssi.py`). The `type: ignore[override]` comment is a real
-  mismatch with `oops.Host`: `from_file` names its first parameter `fileinfo`.
+  `_ssi_labels.py` and `ssi.py`). The two `type: ignore[override]` comments are real
+  mismatches with `oops.Host`: `from_file` names its first parameter `fileinfo`, and
+  neither method takes the `**kwargs` that `oops.Host` declares.
 - `docs/conf.py` resolves the short class names in docstrings (`FCPath`, `Observation`,
   ...) through intersphinx with `_SHORT_NAMES`. Add a name there when a nitpicky build
   reports a class from another RMS package.
@@ -90,8 +91,9 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   in the comment in `from_file()`).
   Parsed content without a file path leaves out the path subfields, and a full read of a
   `Pds3Label` or `VicarLabel` without one raises `HostFormatError` (`_known_path`).
-  `from_file()` refuses `select` other than None (`oops.Host._check_select`) and any
-  unknown keyword (`_check_keywords`), as `from_index()` does.
+  `from_file()` refuses `select` other than None (`oops.Host._check_select`), as
+  `from_index()` does. Neither takes `**kwargs`, so Python's own `TypeError` reports an
+  unknown keyword.
 - A PDS3 label that the fast parser rejects, for its syntax or for a value it cannot
   convert such as an hour of 25, is retried with the strict parser and then the loose
   one: `_parse_fileinfo` calls `oops.Host._read_fileinfo(..., pds3_fallback=True)`; a
@@ -184,8 +186,11 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   `oops.frame.SpiceErrorFrame`, which raises the same error whenever it is evaluated. A
   clock count that the clock kernel cannot convert raises `OopsSpiceError` from
   `_Galileo.tdb_from_sclk()`. The path subfields come from
-  `oops.Host._apply_overrides()`, which gives `abspath` only for a file that is local or
-  already in the cache and leaves the file system as it is.
+  `oops.Host._apply_overrides()`, which leaves the file system as it is. `abspath` is
+  passed to it only by a full `from_file()` read that retrieves the image file for its
+  array: `_read_vicar_image()` calls `FCPath.retrieve()` and returns the local path with
+  the array. An astrometry read, a `VicarImage` passed in, and `from_index()` give none,
+  even for a file that is local or already in the cache.
 - `IMAGE_TIME` is the middle of the exposure. Without it, the start time comes from
   `SPACECRAFT_CLOCK_START_COUNT` plus the shutter delay for the `FRAME_DURATION`
   (`_SHUTTER_DELAY`), one frame earlier for an `EXTENDED` exposure taken before the
@@ -200,8 +205,10 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   supplement writes `SPACECRAFT_CLOCK_START_COUNT` in SPICE
   form and the index in label form, so the default validation, which compares every
   shared column, would reject every real pair until the index is corrected;
-  `validate=()` leaves the pairing's comparison of `VOLUME_ID` and
-  `FILE_SPECIFICATION_NAME` as the only check, which is right on a corrected table too.
+  `validate=()` leaves the pairing's comparison of `FILE_SPECIFICATION_NAME` as the only
+  check, which is right on a corrected table too. `file_key='FILE_SPECIFICATION_NAME'`
+  is oops's default but is named, because only a named key makes a table without the
+  column fail at call time; by default such tables are paired without comparing files.
   By default (`supplement=oops.Host.SUPPLEMENT`) the supplement beside the index is read,
   and it must exist (`FileNotFoundError`); `supplement=None` raises `HostIndexError`
   unless `row_dicts` is given. Index values win the merge, so the clock count stays in

@@ -12,7 +12,9 @@ The call itself checks the arguments and reads the PDS3 labels of the index and 
 supplement, so a wrong argument or a label that cannot be read raises an error at once.
 The rows of the two tables are read as the iteration goes on, a few at a time, and each
 row's Snapshot is built when the iteration reaches that row. The memory used stays about
-the same however long the index is. An error in a row is raised when the iteration
+the same however long the index is when the installed OOPS frees the frames and paths
+built for each row once its Snapshot is gone; with a version that keeps them, the
+memory grows a little with each row. An error in a row is raised when the iteration
 reaches it, after the rows before it, and the iteration ends there: the rows after it
 are not given. The one exception is a row longer than its label says, whose error comes
 a few rows early, as described below. The ``filter`` argument, described below, can
@@ -49,8 +51,8 @@ The ``supplement`` argument chooses the supplemental index:
 
 Every SSI index lists its images in the same order as its supplement, so the host reads
 the two tables in step and merges each index row with the supplement row in the same
-position. The two rows must give the same ``VOLUME_ID`` and ``FILE_SPECIFICATION_NAME``.
-If they do not, or if one table ends before the other, the host raises
+position. The two rows must give the same ``FILE_SPECIFICATION_NAME``. If they do not,
+or if one table ends before the other, the host raises
 :exc:`~oops.host.HostIndexError` when the iteration reaches that row, and the message
 gives the row and both tables. If the supplement has rows left over, the error comes
 after the last row of the index.
@@ -61,7 +63,7 @@ A table file that does not match its label is read as follows:
   raises :exc:`~oops.host.HostIndexError`. One that holds more raises the same error
   after the last row that its label lists.
 - A row longer than the label says raises :exc:`~oops.host.HostIndexError` at the first
-  of the ten rows read with it, and none of those ten rows is given. A row shorter than
+  of the 100 rows read with it, and none of those 100 rows is given. A row shorter than
   the label says is read as it is.
 - A value that cannot be read as the number its column describes is not an error of the
   table: the table reader issues a warning, and the row is given with that value as
@@ -100,7 +102,7 @@ Other arguments
     The same as for :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file`, applied to every
     row.
 
-Any other keyword raises :exc:`~oops.OopsTypeError`, so that a misspelled argument is
+Any other keyword raises Python's :exc:`TypeError`, so that a misspelled argument is
 caught.
 
 What one row gives
@@ -172,9 +174,10 @@ the location of the index:
   matching ``volumes`` tree, ``.../volumes/GO_0xxx``.
 - For an index anywhere else, they are in the index's own directory.
 
-The row's ``VOLUME_ID`` and file specification complete the path. ``abspath`` is present
-only when the image file is local or already in the local cache. Reading an index leaves
-the file system as it is, even when the volumes are not there.
+The row's ``VOLUME_ID`` and file specification complete the path. Reading an index does
+not retrieve the image files, so no Snapshot has ``abspath``, even when the image file is
+on the local disk or already in the local cache. Reading an index leaves the file system
+as it is, even when the volumes are not there.
 
 Reading an index through oops.Host
 ==================================

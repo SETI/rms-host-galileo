@@ -43,7 +43,7 @@ Reading an image file
 :exc:`FileNotFoundError`
     The image file that a PDS3 label points to does not exist, in a read that needs it.
 
-:exc:`~oops.OopsTypeError`
+:exc:`TypeError`
     A keyword argument is not one that the method accepts.
 
 :exc:`~oops.OopsValueError`
@@ -62,8 +62,7 @@ called:
 :exc:`~oops.host.HostIndexError`
     ``supplement`` is None and ``row_dicts`` is not given; the index's file name
     lacks the ``_index`` from which to find the supplement; a label does not describe a
-    table that can be read; or a table lacks ``VOLUME_ID`` or
-    ``FILE_SPECIFICATION_NAME``.
+    table that can be read; or a table lacks ``FILE_SPECIFICATION_NAME``.
 
 :exc:`~oops.host.PdsHostError`
     The label of the index or of the supplement cannot be parsed.
@@ -71,7 +70,7 @@ called:
 :exc:`FileNotFoundError`
     The label of the supplemental index does not exist.
 
-:exc:`~oops.OopsTypeError`
+:exc:`TypeError`
     A keyword argument is not one that the method accepts.
 
 :exc:`~oops.OopsValueError`
@@ -94,7 +93,7 @@ iteration ends there:
     The index row and the supplement row in the same position give different images; the
     supplement ends before the index; a table file ends before the last row that its
     label lists, after every row it holds; or a row is longer than the label says, at the
-    first of the ten rows read with it. The message gives the row, counted from 0, and
+    first of the 100 rows read with it. The message gives the row, counted from 0, and
     both tables. A supplement with rows left over, or a table file with more rows than
     its label lists, raises the same error after the last row of the index.
 
