@@ -38,11 +38,14 @@ included, at ``https://storage.googleapis.com/rms-node-oops-resources``, a URL t
 
 The host furnishes one fixed set of kernels, which covers the whole mission. They lie
 under ``General`` and ``Galileo`` in the ``SPICE_PATH`` directory: the leap-second
-kernel, the spacecraft clock kernel, the frame kernel, the planetary and spacecraft
-ephemerides, and the scan platform C kernels. The rest are chosen through the
-database: the SSI instrument kernel, and the kernels that OOPS loads to define the
-planets and moons, which are a leap-second kernel, the planetary constants, and the
-ephemerides of the planets and their moons.
+kernel, the SSI instrument kernel, the frame kernel, the spacecraft clock kernel, the
+planetary and spacecraft ephemerides, and the scan platform C kernels. Other kernels
+are chosen through the database before the fixed set is furnished: a leap-second
+kernel; the SSI instrument kernel, with the frame and spacecraft clock kernels that
+belong to it; and the kernels that OOPS loads to define the planets and moons, which
+are the planetary constants and the ephemerides of the planets and their moons. Where
+two kernels give the same information, SPICE uses the one furnished last, so wherever
+the fixed set and the database's choices overlap, the fixed set is what counts.
 
 Registering the host
 ====================
@@ -65,14 +68,13 @@ Initialization
 
 The first call to :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file` or
 :meth:`~host_galileo.oops.ssi.GalileoSSI.from_index` loads the kernels and defines the
-camera's fields of view. To choose the bodies that OOPS defines, or to use only the
-kernels that existed before a given date, call
+camera's fields of view. To set the options described below, call
 :meth:`~host_galileo.oops.ssi.GalileoSSI.initialize` before opening the first image.
-The date applies to every kernel chosen through the database, and never to the fixed
-set.
-Its ``planets`` option takes one planet number, from 1 for Mercury to 9 for Pluto, or a
-sequence of them. This call defines Jupiter, planet 5, and its moons, and no other
-planet:
+Later calls to :meth:`~host_galileo.oops.ssi.GalileoSSI.initialize` are ignored.
+
+The ``planets`` option chooses the bodies that OOPS defines. It takes one planet
+number, from 1 for Mercury to 9 for Pluto, or a sequence of them. This call defines
+only Jupiter, planet 5, and its moons:
 
 .. code-block:: python
 
@@ -80,7 +82,22 @@ planet:
 
    GalileoSSI.initialize(planets=(5,))
 
-Later calls to :meth:`~host_galileo.oops.ssi.GalileoSSI.initialize` are ignored.
+The ``asof`` option takes a date, and asks the database for the kernels that existed
+before it. It changes less than that suggests:
+
+- The fixed set of kernels ignores the date, and it overrides the database's choices
+  wherever the two overlap. The leap seconds, the SSI instrument, frame, and
+  spacecraft clock kernels, the C kernels, and every ephemeris in the fixed set are the
+  same whatever the date. For example, the positions of Jupiter, Io, and Europa seen
+  from Galileo are the same with ``asof='1997-01-01'`` as without a date.
+- The first leap-second kernel is loaded without the date, so it is always the latest
+  one.
+- Where the database does not list a kernel of some kind from before the date, it
+  chooses as if no date were given, without a warning. With ``asof='1997-01-01'``, for
+  example, the database chooses the leap-second kernel of 2016.
+
+The date can change only the planetary constants and the ephemerides of bodies that
+the fixed set does not cover.
 
 Image files and indexes
 =======================

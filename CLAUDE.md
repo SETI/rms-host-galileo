@@ -224,17 +224,22 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   directories from the index's own location (`volumes` in place of `metadata` in an RMS
   Node metadata tree, else the index's directory), and `oops.Host._index_file_path()`
   joins the row's `VOLUME_ID` and file specification to it (design D5).
-  `_detect_in_index()` decides from the label's `INSTRUMENT_HOST_NAME` and
-  `INSTRUMENT_ID`; for a label without them (the metadata versions before v4) it
-  returns None, so that the host is identified from the first row, which both
-  `oops.Host.from_index()` and `_index_rows()` read at call time. A table value that `PdsTable` cannot read as
-  its column's number is yielded as a string with a UserWarning, not an error of the
+  `_detect_in_index()` returns None for a label without `INSTRUMENT_HOST_NAME` (the
+  metadata versions before v4), whatever `INSTRUMENT_ID` gives, so that the host is
+  identified from the first row, which both `oops.Host.from_index()` and
+  `_index_rows()` read at call time; for a label with it, the detector decides from
+  `INSTRUMENT_HOST_NAME` and `INSTRUMENT_ID`. A table value that `PdsTable` cannot read
+  as its column's number is yielded as a string with a UserWarning, not an error of the
   table; the docs say what oops does with malformed rows rather than promising a check.
 - `GalileoSSI.from_index()` returns an iterator. It checks its arguments and reads the
   labels (and the first index row for a label that does not name the host, so a
   missing index table then raises at the call), then returns a generator that builds
-  each row's Snapshot when the iteration reaches it. It must not be a generator function, which would defer every call-time
-  error to the first `next()`.
+  each row's Snapshot when the iteration reaches it. It must not be a generator
+  function, which would defer every call-time error to the first `next()`. With
+  `row_dicts`, `_index_rows()` returns the given rows before any read or check, so the
+  call reads only the index label for `ratios_rotated()` (and not that when `label` is
+  given): the supplement label, the host check, and the column checks are skipped, and
+  `pds3_options` is checked only by that one parse.
 - The hosts apply the standard overrides through `oops.Host._apply_overrides()`, passing
   them to `_make_snapshot()` as one `overrides` dict, as rms-host-cassini does.
 - TARGET_NAME repairs and the star targets that become light sources are in `ssi.py`
@@ -243,6 +248,13 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   `spicedb.get_spice_filecache_prefix()`, and the instrument kernel through `spicedb`
   (`SPICE_PATH`, or `$OOPS_RESOURCES/SPICE`, plus `SPICE_SQLITE_DB_NAME`). `spicedb`
   currently ships inside rms-oops.
+- `asof` reaches only the database choices: `Body.define_solar_system()` (LSK, PCK,
+  SPK), `furnish_inst()` (SCLK, FK, IK), and `spice_instrument_kernel()`. spicedb's
+  `redo=True` drops the date where nothing qualifies (a 2016 LSK under 1997-01-01),
+  `oops.spice.load_leap_seconds()` does not take a date, and `load_kernels()` furnishes
+  `_KERNELS` last, which overrides the database wherever they overlap (Jupiter, Io, and
+  Europa states are identical with and without `asof`). Whether `asof` should change
+  that is an open operator question; do not change the load order without a ruling.
 
 ## Repo etiquette
 

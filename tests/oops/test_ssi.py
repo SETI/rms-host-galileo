@@ -636,7 +636,7 @@ def test_from_file_vicar_reads_the_clock(tmp_path: pathlib.Path, key: str) -> No
     assert obs.dict[key] == _CLOCK[key]
 
 
-# An astrometry read of the label reads only the label, which holds neither field
+# An astrometry read of the label reads only the label, which does not give these fields
 @pytest.mark.parametrize('key', ['MOD10', 'MOD8'])
 def test_from_file_pds3_astrometry_lacks_the_finer_clock(tmp_path: pathlib.Path,
                                                          key: str) -> None:
@@ -2048,6 +2048,24 @@ def test_from_index_rows_need_no_supplement(tmp_path: pathlib.Path) -> None:
     index = write_index(tmp_path)
     assert len(list(GalileoSSI.from_index(index, row_dicts=index_rows(index),
                                           supplement=None))) == 3
+
+
+def test_from_index_given_rows_skip_the_supplement_label(tmp_path: pathlib.Path) -> None:
+    """With the default supplement, which does not exist, the given rows still load."""
+
+    index = write_index(tmp_path)
+    assert len(list(GalileoSSI.from_index(index, row_dicts=index_rows(index)))) == 3
+
+
+def test_from_index_given_rows_skip_the_host_check(tmp_path: pathlib.Path) -> None:
+    """The label of another host's index raises nothing when the rows are given."""
+
+    (tmp_path / 'ssi').mkdir()
+    rows = index_rows(write_index(tmp_path / 'ssi'))
+    path = write_table(tmp_path, 'GO_0017_index', 'IMAGE_INDEX_TABLE', _INDEX_COLUMNS,
+                       _INDEX_ROWS, MISSION_NAME='CASSINI',
+                       INSTRUMENT_HOST_NAME='CASSINI', INSTRUMENT_ID='ISS')
+    assert len(list(GalileoSSI.from_index(path, row_dicts=rows))) == 3
 
 
 def test_from_index_given_rows_need_the_label(tmp_path: pathlib.Path) -> None:

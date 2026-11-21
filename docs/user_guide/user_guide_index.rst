@@ -10,9 +10,9 @@ images one at a time.
 It returns an iterator, which gives the Snapshots row by row, in the order of the index.
 The call itself checks the arguments and reads the PDS3 labels of the index and its
 supplement, so a wrong argument or a label that cannot be read raises an error at once.
-An index label that does not give ``INSTRUMENT_HOST_NAME`` and ``INSTRUMENT_ID``, as in
-the metadata tree's versions before v4, does not show that the index is an SSI index,
-so the call also reads the first row of the index to recognize it. The rows of the two
+An index label that does not give ``INSTRUMENT_HOST_NAME``, as in the metadata tree's
+versions before v4, does not show that the index is an SSI index, so the call also
+reads the first row of the index to recognize it. The rows of the two
 tables are read as the iteration goes on, a few at a time, and each
 row's Snapshot is built when the iteration reaches that row. The memory used stays about
 the same however long the index is when the installed OOPS frees the frames and paths
@@ -82,10 +82,13 @@ Other arguments
 ``row_dicts``
     The rows themselves, one dictionary per row, if the tables have already been read,
     each row already merged with its supplement row. Any iterable works, and the host
-    takes the rows one at a time as the iteration needs them. The host then reads
-    neither table, and ``supplement`` is not used. It still reads the index's PDS3
-    label, unless ``label`` is given, because the label tells whether the table writes
-    the compression ratios in rotated columns (see below). A value that a table declares
+    takes the rows one at a time as the iteration needs them. The call then reads only
+    the index's PDS3 label, because the label tells whether the table writes the
+    compression ratios in rotated columns (see below), and it does not read even that
+    when ``label`` is given. It does not read the supplement or either table, does not
+    check that the index is an SSI index, and does not check the tables' columns, so the
+    errors that those reads and checks raise at the call do not occur; ``supplement`` is
+    not used. A value that a table declares
     as its column's null or not-applicable constant, such as an
     ``ICT_DESPIKE_THRESHOLD`` of -1, is left out only when the row also carries the mask
     that the table reader adds for it, under the column's name followed by ``_mask``. A

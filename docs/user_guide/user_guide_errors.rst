@@ -76,24 +76,35 @@ called:
 
 :exc:`~oops.OopsValueError`
     ``select`` is not None, ``filter`` holds a column that neither table has, or
-    ``pds3_options`` holds an option that the parser does not accept. When ``row_dicts``
-    is an iterator rather than a sequence, a ``filter`` column that its first row lacks
-    raises this error when the iteration reads that row.
+    ``pds3_options`` holds an option that the parser does not accept. The options are
+    checked only when the call parses the index's label, so they are not checked when
+    ``label`` is given. When ``row_dicts`` is an iterator rather than a sequence, a
+    ``filter`` column that its first row lacks raises this error when the iteration
+    reads that row.
 
 :exc:`~oops.host.WrongHostError`
-    The file is not a Galileo SSI index. When the rows are given with ``row_dicts``,
-    this is not checked.
+    The file is not a Galileo SSI index.
 
 :exc:`OSError`
     The label of the index or of a named supplement does not exist or cannot be read.
+
+When ``label`` is given, the index's label is not read again, so the errors above that
+come from reading it are not raised.
+
+When the rows are given with ``row_dicts``, the call reads the index's label, unless
+``label`` is given, and nothing else. It does not read the supplement or either table,
+does not check that the index is an SSI index, and does not check the tables' columns.
+Of the errors above, it can then raise only :exc:`TypeError`,
+:exc:`~oops.OopsValueError`, and, from the index's label, :exc:`~oops.host.PdsHostError`
+and :exc:`OSError`.
 
 A table file that does not exist or cannot be read raises :exc:`OSError` when the
 iteration starts. The exception is an index whose label does not give
 ``INSTRUMENT_HOST_NAME``, as in the metadata tree's versions before v4, whether or not
 it gives ``INSTRUMENT_ID``: the call reads the index's first row to recognize it as an
 SSI index, so a missing or unreadable index table raises :exc:`OSError` at the call.
-When the rows are given with ``row_dicts``, the index table is not read at all. These
-errors are raised when the iteration reaches the row, and the iteration ends there:
+These errors are raised when the iteration reaches the row, and the iteration ends
+there:
 
 :exc:`~oops.host.HostIndexError`
     The index row and the supplement row in the same position give different images; the

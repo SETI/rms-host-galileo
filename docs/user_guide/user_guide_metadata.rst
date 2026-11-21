@@ -190,6 +190,6 @@ The spacecraft clock count
 VICAR header it is formed from ``RIM`` and ``MOD91``. The header's finer fields,
 ``MOD10`` and ``MOD8``, are in ``dict`` and ``header_dict`` when the image file was
 read, and they are the same whether the image file or its label was given. An
-astrometry read of the label reads only the PDS3 label, which holds neither field, so
-it leaves both out. To get them from a label, read it without ``astrometry``. Neither
+astrometry read of the label reads only the PDS3 label, which does not give these
+fields, so it leaves both out. To get them from a label, read it without ``astrometry``. Neither
 label gives a stop count, so there is no ``spacecraft_clock_stop_count`` subfield.

@@ -552,9 +552,12 @@ class GalileoSSI(oops.Host):
 
         It reads a Ring-Moon Systems Node metadata index and its supplement. The call
         itself checks the arguments and reads the labels of the index and its
-        supplement, so that a wrong call fails at once. The rows of the two tables are
-        then read as the iteration proceeds, a few at a time, and each row's Snapshot is
-        built when the iteration reaches that row. The memory used stays the same
+        supplement, so that a wrong call fails at once. If the index label does not
+        give INSTRUMENT_HOST_NAME, as in the metadata versions before v4, the call also
+        reads the first row of the index, to recognize it as an SSI index. With
+        `row_dicts`, the call reads less, as described there. The rows of the two tables
+        are then read as the iteration proceeds, a few at a time, and each row's Snapshot
+        is built when the iteration reaches that row. The memory used stays the same
         however long the index is only with an rms-oops that frees the frames and paths
         built for each row once its Snapshot is gone; with one that keeps them, it grows
         a little with each row. An error in a row is raised when the iteration
@@ -582,11 +585,17 @@ class GalileoSSI(oops.Host):
             row_dicts (collections.abc.Iterable[dict[str, Any]], optional): The rows of
                 the index, each already merged with its supplement row, if the tables
                 have already been read. They are iterated over in place of the tables,
-                and `supplement` is not used. The label of `filepath` is still read,
-                unless `label` is given, because it tells whether the table writes the
-                compression ratios in rotated columns.
+                and `supplement` is not used. The call then reads only the label of
+                `filepath`, because it tells whether the table writes the compression
+                ratios in rotated columns, and does not read even that if `label` is
+                given. It does not read the supplement's label or either table, does not
+                check that the index is an SSI index, and does not check the tables'
+                columns, so the call-time errors below that come from those reads and
+                checks are not raised.
             pds3_options (dict[str, Any], optional): Any keyword arguments and their
-                values to be passed to the :class:`~pdsparser.Pds3Label` parser.
+                values to be passed to the :class:`~pdsparser.Pds3Label` parser. They
+                are checked when the call parses the index label, which it does only if
+                `label` is not given.
             filter (dict[str, Any], optional): A dictionary of index column names and
                 their values or a set or tuple of values. If provided, only rows of the
                 index in which each named column equals the value, falls in the set of
@@ -682,8 +691,9 @@ class GalileoSSI(oops.Host):
             oops.OopsTypeError: When the iteration reaches a row, if a range in `filter`
                 cannot be compared with the row's value.
             oops.OopsValueError: At call time, if `select` is not None, if a value in
-                `pds3_options` is invalid, or if `filter` uses a column that neither
-                table has. With `row_dicts`, `filter` is checked against the first row:
+                `pds3_options` is invalid while `label` is not given, or if `filter`
+                uses a column that neither table has. With `row_dicts`, `filter` is
+                checked against the first row:
                 at call time if `row_dicts` is a sequence, and when the iteration reads
                 the first row if it is an iterator.
             oops.host.HostIndexError: At call time, if `supplement` is None or empty
@@ -707,16 +717,16 @@ class GalileoSSI(oops.Host):
                 count while its FRAME_DURATION is not one of the SSI frame durations.
             oops.OopsSpiceError: When the iteration reaches a row whose time must come
                 from the spacecraft clock count and the clock kernel cannot convert it.
-            oops.host.PdsHostError: At call time, if the label of the index or of the
-                supplement cannot be parsed.
+            oops.host.PdsHostError: At call time, if the label of the index (unless
+                `label` is given) or of the supplement cannot be parsed.
             oops.host.WrongHostError: At call time, if `filepath` is not a Galileo SSI
-                index. With `row_dicts`, the index is not checked.
-            OSError: At call time, if the label of `filepath` or of the supplement does
-                not exist or cannot be read (FileNotFoundError for a missing
-                supplement). When the iteration starts, if a table file does not exist or
-                cannot be read; at call time for the index table, if the index label
-                lacks INSTRUMENT_HOST_NAME, so that the first row is read to recognize
-                the index. With `row_dicts`, the index table is not read.
+                index.
+            OSError: At call time, if the label of `filepath` (unless `label` is given)
+                or of the supplement does not exist or cannot be read
+                (FileNotFoundError for a missing supplement). When the iteration starts,
+                if a table file does not exist or cannot be read; at call time for the
+                index table, if the index label lacks INSTRUMENT_HOST_NAME, so that the
+                first row is read to recognize the index.
         """
 
         oops.Host._check_select(select, unit='row of a Galileo SSI index')
@@ -742,7 +752,9 @@ class GalileoSSI(oops.Host):
 
         # Read the index and the supplement as the iteration proceeds, a few rows at a
         # time, each index row paired with its supplement row and filtered. The call
-        # itself reads only the labels. Both tables also give
+        # itself reads the labels, and the first index row only for a label without
+        # INSTRUMENT_HOST_NAME; with row_dicts, it does not read the supplement or the
+        # tables, and it skips the host check. Both tables also give
         # SPACECRAFT_CLOCK_START_COUNT, but the supplement writes it in the SPICE form
         # "RRRRRRRR:MM:S:T" and the index in the label form "RRRRRRRR.MM", so the default
         # validation, which compares every shared column, would reject every real pair
@@ -1045,8 +1057,14 @@ class GalileoSSI(oops.Host):
                 planet, from 1 for Mercury to 9 for Pluto, or a sequence of such numbers,
                 such as (5,) for Jupiter alone; each planet and its moons are defined
                 through :meth:`~oops.Body.define_solar_system`. None or 0 means all.
-            asof (str, optional): Only use SPICE kernels that existed before this date;
-                None to ignore.
+            asof (str, optional): A date, so that the database chooses the kernels
+                that existed before it: the planetary constants and ephemerides that
+                define the bodies, and the SSI instrument kernel with its frame and
+                spacecraft clock kernels. None to ignore. Where the database does not
+                list a kernel of some kind from before the date, it chooses as if no date
+                were given. The first leap-second kernel is loaded without the date, and
+                the fixed set of kernels ignores it; the fixed set is furnished last, so
+                it overrides the database's choices wherever the two overlap.
             irregulars (bool, optional): True to include the irregular satellites; False
                 otherwise.
 
