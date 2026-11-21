@@ -39,8 +39,9 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   change. The `[tool.mypy] exclude`, the override list in `pyproject.toml` and
   `.stubtest-allowlist` keep it off the stub-less modules (`_galileo.py`,
   `_ssi_labels.py` and `ssi.py`). The two `type: ignore[override]` comments are real
-  mismatches with `oops.Host`: `from_file` names its first parameter `fileinfo`, and
-  neither method takes the `**kwargs` that `oops.Host` declares.
+  mismatches with `oops.Host`: `from_file` names its first parameter `fileinfo`, neither
+  method takes the `**kwargs` that `oops.Host` declares, and both type `select` as
+  `None`, the only value they accept, where `oops.Host` types it more widely.
 - `docs/conf.py` resolves the short class names in docstrings (`FCPath`, `Observation`,
   ...) through intersphinx with `_SHORT_NAMES`. Add a name there when a nitpicky build
   reports a class from another RMS package.

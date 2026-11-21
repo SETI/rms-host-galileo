@@ -29,22 +29,12 @@ variables:
     The SQLite database that lists the kernels. If it is not set, ``SPICE.db`` in the
     ``SPICE_PATH`` directory is used.
 
-The Ring-Moon Systems Node publishes the kernels and the database together, in the
-``SPICE`` directory of its OOPS resources at
-``https://storage.googleapis.com/rms-node-oops-resources``. The simplest setup reads
-them from there:
-
-.. code-block:: sh
-
-   export OOPS_RESOURCES=https://storage.googleapis.com/rms-node-oops-resources
-
-Each kernel that the host needs is then fetched into the local file cache the first
-time it is used. To work without a network connection, copy that ``SPICE`` directory
-to a local disk and set ``SPICE_PATH`` to the copy.
-
 The kernels and the database are the ones that OOPS itself uses. The
 `rms-oops README <https://github.com/SETI/rms-oops#environment-variables>`_ describes
 these variables and the ``SPICE`` directory of ``$OOPS_RESOURCES`` that holds them.
+The Ring-Moon Systems Node publishes these resources, the kernels and ``SPICE.db``
+included, at ``https://storage.googleapis.com/rms-node-oops-resources``, a URL that
+``OOPS_RESOURCES`` can name directly.
 
 The host furnishes one fixed set of kernels, which covers the whole mission. They lie
 under ``General`` and ``Galileo`` in the ``SPICE_PATH`` directory: the leap-second

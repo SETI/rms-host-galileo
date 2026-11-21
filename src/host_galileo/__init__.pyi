@@ -37,7 +37,8 @@ class GalileoSSI(Host):
     # False: every SSI index lists its files in its supplement's order, so the rows are
     # paired by position.
     MERGE_SUPPLEMENT_BY_FILE: bool
-    # The runtime names the first parameter `fileinfo`, where Host names it `filepath`.
+    # The runtime names the first parameter `fileinfo`, where Host names it `filepath`,
+    # and accepts only None for select, which Host types more widely.
     # Given the image file, only it is read; given a PDS3 label, the label and its image
     # file are read and their metadata merged, except that with astrometry=True the label
     # is read alone and the image file need not exist. A value that no label read gives
@@ -56,7 +57,7 @@ class GalileoSSI(Host):
         | VicarImage, *,
         full_fov: bool = False, return_all_planets: bool = False,
         pds3_options: dict[str, Any] | None = None, astrometry: bool = False,
-        select: int | slice | str | tuple[int | slice | str, ...] | None = None,
+        select: None = None,
         target: str | Body | None = None, lightsource: LightSource | None = None,
         path: str | Path | None = None, frame: str | Frame | None = None,
         cadence: Cadence | None = None, fov: FOV | None = None,
@@ -65,14 +66,15 @@ class GalileoSSI(Host):
         navigation: tuple[float, ...] | None = None, tracker: str | None = None,
         parallel: Observation | None = None) -> Snapshot: ...
     # Every row is one Snapshot. The index is the Ring-Moon Systems Node metadata index,
-    # read with its supplement. The supplement is required: None raises
+    # read with its supplement. The supplement is required: None or an empty path raises
     # oops.host.HostIndexError unless row_dicts is given. select must be None
     # (oops.OopsValueError), and any other keyword raises Python's TypeError. The call
     # reads only the labels; the iterator reads the two
     # tables a few rows at a time, pairs each index row with the supplement row in the
     # same position, builds each row's Snapshot when it reaches the row, and ends at the
     # first row that raises. Rows whose files differ raise oops.host.HostIndexError there.
-    # Host.from_index declares **kwargs, which this method does not take.
+    # Host.from_index declares **kwargs, which this method does not take, and accepts
+    # other values of select, which this method refuses.
     @staticmethod
     def from_index(  # type: ignore[override]
         filepath: str | pathlib.Path | FCPath, *,
@@ -82,7 +84,7 @@ class GalileoSSI(Host):
         pds3_options: dict[str, Any] | None = None,
         filter: dict[str, Any] | None = None, full_fov: bool = False,
         return_all_planets: bool = False,
-        select: int | slice | str | tuple[int | slice | str, ...] | None = None,
+        select: None = None,
         target: str | Body | None = None, lightsource: LightSource | None = None,
         path: str | Path | None = None, frame: str | Frame | None = None,
         cadence: Cadence | None = None, fov: FOV | None = None,
