@@ -2093,13 +2093,17 @@ def test_from_index_uses_a_given_label(tmp_path: pathlib.Path,
     label = Pds3Label(index)
     labels: list[Any] = []
     index_rows_ = GalileoSSI._index_rows
+    parse_ = oops.Host._parse_index_label
 
     def spy(filepath: Any, **kwargs: Any) -> Any:
         labels.append(kwargs['label'])
         return index_rows_(filepath, **kwargs)
 
-    def parse(*args: Any) -> None:
-        raise AssertionError('the index label was parsed again')
+    # The supplement's label may be parsed by the same method, so only the index's fails
+    def parse(filepath: Any, *args: Any, **kwargs: Any) -> Any:
+        if FCPath(filepath) == FCPath(index):
+            raise AssertionError('the index label was parsed again')
+        return parse_(filepath, *args, **kwargs)
 
     monkeypatch.setattr(GalileoSSI, '_index_rows', spy)
     monkeypatch.setattr(oops.Host, '_parse_index_label', parse)

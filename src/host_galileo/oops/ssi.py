@@ -563,8 +563,10 @@ class GalileoSSI(oops.Host):
         built for each row once its Snapshot is gone; with one that keeps them, it grows
         a little with each row. An error in a row is raised when the iteration
         reaches it, after every earlier row has been yielded (except for a row longer
-        than its label says, as described below), and the iteration ends there;
-        `filter` can leave such a row out.
+        than its label says, as described below), and the iteration ends there.
+        `filter` can leave out a row whose Snapshot would raise, but it cannot avoid an
+        error in reading or pairing the rows of the tables, because the rows are
+        filtered only after they have been read and paired.
 
         Every SSI index lists its files in the same order as its supplement, so the two
         tables are read in step and each index row is paired with the supplement row in
@@ -594,9 +596,12 @@ class GalileoSSI(oops.Host):
                 columns, so the call-time errors below that come from those reads and
                 checks are not raised.
             pds3_options (dict[str, Any], optional): Any keyword arguments and their
-                values to be passed to the :class:`~pdsparser.Pds3Label` parser. They
-                are checked when the call parses the index label, which it does only if
-                `label` is not given.
+                values to be passed to the :class:`~pdsparser.Pds3Label` parser. The
+                options are checked when the call is made, unless `row_dicts` is given,
+                when they are not used. The index's label is parsed with all of them, and
+                the supplement's label with the method alone. (The index's label is still
+                parsed with them, and so they are still checked, when `row_dicts` is
+                given and `label` is not.)
             filter (dict[str, Any], optional): A dictionary of index column names and
                 their values or a set or tuple of values. If provided, only rows of the
                 index in which each named column equals the value, falls in the set of
@@ -691,12 +696,14 @@ class GalileoSSI(oops.Host):
             TypeError: At call time, if a keyword argument is not one of those listed.
             oops.OopsTypeError: When the iteration reaches a row, if a range in `filter`
                 cannot be compared with the row's value.
-            oops.OopsValueError: At call time, if `select` is not None, if a value in
-                `pds3_options` is invalid while `label` is not given, or if `filter`
+            oops.OopsValueError: At call time, if `select` is not None, or if `filter`
                 uses a column that neither table has. With `row_dicts`, `filter` is
                 checked against the first row: at call time if `row_dicts` is a
                 sequence, and when the iteration reads the first row if it is an
-                iterator.
+                iterator. Also if `pds3_options` names a method the parser does not have
+                or an option it does not take. The call checks the options when it is
+                made, unless `row_dicts` is given. (It still checks them, by parsing the
+                index's label with them, when `row_dicts` is given and `label` is not.)
             oops.host.HostIndexError: At call time, if `supplement` is None or empty
                 while `row_dicts` is not given; if `supplement` is
                 `oops.Host.SUPPLEMENT` and the name of `filepath` contains no "_index";

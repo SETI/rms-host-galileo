@@ -21,8 +21,9 @@ memory grows a little with each row. An error in a row is raised when the iterat
 reaches it, after the rows before it, and the iteration ends there: the rows after it
 are not given. The one exception is a row longer than its label says, whose error comes
 a few rows early, as described below. The ``filter`` argument, described below, can
-leave out a row whose Snapshot cannot be built. To build every row at once, pass the
-iterator to ``list()``:
+leave out a row whose Snapshot would raise, but it cannot avoid an error in reading or
+pairing the rows of the tables, because the rows are filtered only after they have been
+read and paired. To build every row at once, pass the iterator to ``list()``:
 
 .. code-block:: python
 
@@ -108,7 +109,16 @@ Other arguments
     Must be None. Each row is one image, so there is nothing to select, and any other
     value raises :exc:`~oops.OopsValueError`.
 
-``full_fov``, ``return_all_planets``, ``pds3_options``, and the standard overrides
+``pds3_options``
+    The options of the PDS3 label parser, as for
+    :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file`, except that an index's label is
+    not tried again with the strict or loose method. The options are checked when the
+    call is made, unless ``row_dicts`` is given, when they are not used. The index's
+    label is parsed with all of them, and the supplement's label with the method alone.
+    (The index's label is still parsed with them, and so they are still checked, when
+    ``row_dicts`` is given and ``label`` is not.)
+
+``full_fov``, ``return_all_planets``, and the standard overrides
     The same as for :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file`, applied to every
     row.
 
