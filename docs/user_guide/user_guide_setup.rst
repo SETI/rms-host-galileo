@@ -69,8 +69,9 @@ Initialization
 The first call to :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file` or
 :meth:`~host_galileo.oops.ssi.GalileoSSI.from_index` loads the kernels and defines the
 camera's fields of view. To set the options described below, call
-:meth:`~host_galileo.oops.ssi.GalileoSSI.initialize` before opening the first image.
-Later calls to :meth:`~host_galileo.oops.ssi.GalileoSSI.initialize` are ignored.
+:meth:`~host_galileo.oops.ssi.GalileoSSI.initialize` before that first call, whether
+it opens an image or reads an index. Later calls to
+:meth:`~host_galileo.oops.ssi.GalileoSSI.initialize` are ignored.
 
 The ``planets`` option chooses the bodies that OOPS defines. It takes one planet
 number, from 1 for Mercury to 9 for Pluto, or a sequence of them. This call defines
