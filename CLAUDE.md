@@ -58,9 +58,6 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   registries, caches, and each class's waypoint and wayframe pools for every test, as
   rms-host-new-horizons does, until oops has one helper for it (the issue is cited in
   the fixture's comment).
-- `test_files/metadata_versions/` holds the GO_0021 index label of every version of the
-  metadata tree that the holdings keep (v1.0 to v4 and the current one), for the tests
-  of `ratios_rotated()`.
 
 ## Architecture gotchas
 
@@ -161,12 +158,11 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   renames the three compression ratios (`_INDEX_RATIO_COLUMNS`), which every SSI index
   writes in rotated columns. `ratios_rotated()` decides that once per table from the
   order of the column names in the index label alone (MIN, MAX, RATIO in byte order):
-  every version of the metadata tree, each made again with a new
-  `PRODUCT_CREATION_TIME`, kept that order and the rotated values, and the requested
-  correction renames the columns. It gives the tour's `DATA_SET_ID` the labels' version
-  1.1 (`_INDEX_VALUE_REPAIRS`) and the shortened `NTV_SAT_TIME_FROM_CLOSEST_APR` the
-  labels' name (`_INDEX_NAMES`); both leave a corrected row as it is. Each index
-  workaround's comment names its rms-data-projects item.
+  the requested correction renames the columns. It gives the tour's
+  `DATA_SET_ID` the labels' version 1.1 (`_INDEX_VALUE_REPAIRS`) and the shortened
+  `NTV_SAT_TIME_FROM_CLOSEST_APR` the labels' name (`_INDEX_NAMES`); both leave a
+  corrected row as it is. Each index workaround's comment names its rms-data-projects
+  item.
 - `merge_items()` keeps every item of either source. Where both give an item and the
   values differ, `resolve()` keeps the source that `_RULES` names for that item, the same
   for every image, or the PDS3 label for an item with no rule; there is no per-image test.
@@ -224,17 +220,14 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   directories from the index's own location (`volumes` in place of `metadata` in an RMS
   Node metadata tree, else the index's directory), and `oops.Host._index_file_path()`
   joins the row's `VOLUME_ID` and file specification to it (design D5).
-  `_detect_in_index()` decides from the label's `INSTRUMENT_HOST_NAME` and
-  `INSTRUMENT_ID`; for a label without them (the metadata versions before v4) it
-  returns None, so that the host is identified from the first row, which both
-  `oops.Host.from_index()` and `_index_rows()` read at call time. A table value that `PdsTable` cannot read as
-  its column's number is yielded as a string with a UserWarning, not an error of the
+  `_detect_in_index()` decides from `INSTRUMENT_HOST_NAME` and `INSTRUMENT_ID`. A table
+  value that `PdsTable` cannot read
+  as its column's number is yielded as a string with a UserWarning, not an error of the
   table; the docs say what oops does with malformed rows rather than promising a check.
 - `GalileoSSI.from_index()` returns an iterator. It checks its arguments and reads the
-  labels (and the first index row for a label that does not name the host, so a
-  missing index table then raises at the call), then returns a generator that builds
-  each row's Snapshot when the iteration reaches it. It must not be a generator function, which would defer every call-time
-  error to the first `next()`.
+  labels, then returns a generator that builds
+  each row's Snapshot when the iteration reaches it. It must not be a generator
+  function, which would defer every call-time error to the first `next()`.
 - The hosts apply the standard overrides through `oops.Host._apply_overrides()`, passing
   them to `_make_snapshot()` as one `overrides` dict, as rms-host-cassini does.
 - TARGET_NAME repairs and the star targets that become light sources are in `ssi.py`

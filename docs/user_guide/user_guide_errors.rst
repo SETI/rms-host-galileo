@@ -92,12 +92,9 @@ called:
     The label of the index or of a named supplement does not exist or cannot be read.
 
 A table file that does not exist or cannot be read raises :exc:`OSError` when the
-iteration starts. The exception is an index whose label does not give
-``INSTRUMENT_HOST_NAME``, as in the metadata tree's versions before v4, whether or not
-it gives ``INSTRUMENT_ID``: the call reads the index's first row to recognize it as an
-SSI index, so a missing or unreadable index table raises :exc:`OSError` at the call.
-When the rows are given with ``row_dicts``, the index table is not read at all. These
-errors are raised when the iteration reaches the row, and the iteration ends there:
+iteration starts. When the rows are given with ``row_dicts``, the index table is not
+read at all. These errors are raised when the iteration reaches the row, and the
+iteration ends there:
 
 :exc:`~oops.host.HostIndexError`
     The index row and the supplement row in the same position give different images; the

@@ -723,9 +723,7 @@ class GalileoSSI(oops.Host):
             OSError: At call time, if the label of `filepath` or of the supplement does
                 not exist or cannot be read (FileNotFoundError for a missing
                 supplement). When the iteration starts, if a table file does not exist or
-                cannot be read; at call time for the index table, if the index label
-                lacks INSTRUMENT_HOST_NAME, so that the first row is read to recognize
-                the index. With `row_dicts`, the index table is not read.
+                cannot be read. With `row_dicts`, the index table is not read.
         """
 
         oops.Host._check_select(select, unit='row of a Galileo SSI index')
@@ -1020,21 +1018,11 @@ class GalileoSSI(oops.Host):
         """True if the given index label refers to this host/instrument.
 
         The label of an RMS Node metadata index names the host and instrument at its top
-        level. For a label without the host's name this detector returns None, and the
-        host is judged from a row by :meth:`_detect_in_row`.
+        level.
         """
 
-        host = label.get('INSTRUMENT_HOST_NAME')
-        if host is not None:
-            return host.startswith('GALILEO') and label.get('INSTRUMENT_ID', '') == 'SSI'
-        return None
-
-    @staticmethod
-    def _detect_in_row(row_dict):
-        """True if the given row of an index file label refers to this host/instrument."""
-
-        return (row_dict.get('MISSION_NAME', '') == 'GALILEO'
-                and row_dict.get('INSTRUMENT_ID', '') == 'SSI')
+        return (label.get('INSTRUMENT_HOST_NAME', '').startswith('GALILEO')
+                and label.get('INSTRUMENT_ID', '') == 'SSI')
 
     ######################################################################################
     # Initialization
