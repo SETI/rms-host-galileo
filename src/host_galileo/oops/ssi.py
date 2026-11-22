@@ -599,9 +599,10 @@ class GalileoSSI(oops.Host):
                 values to be passed to the :class:`~pdsparser.Pds3Label` parser. The
                 options are checked when the call is made, unless `row_dicts` is given,
                 when they are not used. The index's label is parsed with all of them, and
-                the supplement's label with the method alone. (The index's label is still
-                parsed with them, and so they are still checked, when `row_dicts` is
-                given and `label` is not.)
+                the supplement's label with the method alone. Each label is parsed with
+                one method, "fast" unless they give another, and no later method is
+                tried. (The index's label is still parsed with them, and so they are
+                still checked, when `row_dicts` is given and `label` is not.)
             filter (dict[str, Any], optional): A dictionary of index column names and
                 their values or a set or tuple of values. If provided, only rows of the
                 index in which each named column equals the value, falls in the set of

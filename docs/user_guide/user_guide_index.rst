@@ -110,13 +110,12 @@ Other arguments
     value raises :exc:`~oops.OopsValueError`.
 
 ``pds3_options``
-    The options of the PDS3 label parser, as for
-    :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file`, except that an index's label is
-    not tried again with the strict or loose method. The options are checked when the
-    call is made, unless ``row_dicts`` is given, when they are not used. The index's
-    label is parsed with all of them, and the supplement's label with the method alone.
-    (The index's label is still parsed with them, and so they are still checked, when
-    ``row_dicts`` is given and ``label`` is not.)
+    Options for the PDS3 label parser. The options are checked when the call is made,
+    unless ``row_dicts`` is given, when they are not used. The index's label is parsed
+    with all of them, and the supplement's label with the method alone. Each label is
+    parsed with one method, the fast method unless the options give another, and no
+    later method is tried. (The index's label is still parsed with them, and so they are
+    still checked, when ``row_dicts`` is given and ``label`` is not.)
 
 ``full_fov``, ``return_all_planets``, and the standard overrides
     The same as for :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file`, applied to every
