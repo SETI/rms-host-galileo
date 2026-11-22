@@ -58,9 +58,6 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   registries, caches, and each class's waypoint and wayframe pools for every test, as
   rms-host-new-horizons does, until oops has one helper for it (the issue is cited in
   the fixture's comment).
-- `test_files/metadata_versions/` holds the GO_0021 index label of every version of the
-  metadata tree that the holdings keep (v1.0, v2.0, v3, v4 and the current one; v2.1's
-  label is byte-identical to v2.0's), for the tests of `ratios_rotated()`.
 
 ## Architecture gotchas
 
@@ -161,9 +158,7 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   renames the three compression ratios (`_INDEX_RATIO_COLUMNS`), which every SSI index
   writes in rotated columns. `ratios_rotated()` decides that once per table from the
   order of the column names in the index label alone (MIN, MAX, RATIO in byte order):
-  every version of the metadata tree kept that order and the rotated values (each
-  version's index label differs from the others, except that v2.1's is byte-identical to
-  v2.0's), and the requested correction renames the columns. It gives the tour's
+  the requested correction renames the columns. It gives the tour's
   `DATA_SET_ID` the labels' version 1.1 (`_INDEX_VALUE_REPAIRS`) and the shortened
   `NTV_SAT_TIME_FROM_CLOSEST_APR` the labels' name (`_INDEX_NAMES`); both leave a
   corrected row as it is. Each index workaround's comment names its rms-data-projects
@@ -225,16 +220,12 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   directories from the index's own location (`volumes` in place of `metadata` in an RMS
   Node metadata tree, else the index's directory), and `oops.Host._index_file_path()`
   joins the row's `VOLUME_ID` and file specification to it (design D5).
-  `_detect_in_index()` returns None for a label without `INSTRUMENT_HOST_NAME` (the
-  metadata versions before v4), whatever `INSTRUMENT_ID` gives, so that the host is
-  identified from the first row, which both `oops.Host.from_index()` and
-  `_index_rows()` read at call time; for a label with it, the detector decides from
-  `INSTRUMENT_HOST_NAME` and `INSTRUMENT_ID`. A table value that `PdsTable` cannot read
+  `_detect_in_index()` decides from `INSTRUMENT_HOST_NAME` and `INSTRUMENT_ID`. A table
+  value that `PdsTable` cannot read
   as its column's number is yielded as a string with a UserWarning, not an error of the
   table; the docs say what oops does with malformed rows rather than promising a check.
 - `GalileoSSI.from_index()` returns an iterator. It checks its arguments and reads the
-  labels (and the first index row for a label that does not name the host, so a
-  missing index table then raises at the call), then returns a generator that builds
+  labels, then returns a generator that builds
   each row's Snapshot when the iteration reaches it. It must not be a generator
   function, which would defer every call-time error to the first `next()`. With
   `row_dicts`, `_index_rows()` returns the given rows before any read or check, so the

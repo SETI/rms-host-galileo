@@ -157,15 +157,8 @@ def test_merge_takes_the_label_central_body_distance() -> None:
     assert _ssi_labels.merge_items(*items())['CENTRAL_BODY_DISTANCE'] == 422186.5
 
 ##########################################################################################
-# The compression-ratio columns in every version of the metadata tree
+# The compression-ratio columns in the index label
 ##########################################################################################
-
-# The GO_0021 index label of each version of the metadata tree that the holdings keep,
-# written from 2018 to 2025, and every one names the ratio columns in the rotated order
-# over rotated values. Each version's label differs from the others, except that
-# GO_0xxx_v2.1's label is byte-identical to GO_0xxx_v2.0's, so v2.0's covers it.
-METADATA_VERSIONS = TEST_FILES / 'metadata_versions'
-VERSIONS = ['GO_0xxx_v1.0', 'GO_0xxx_v2.0', 'GO_0xxx_v3', 'GO_0xxx_v4', 'GO_0xxx']
 
 # The correction asked for: the three columns renamed, the values left in place
 RENAMED = {'ENCODING_MIN_COMPRESSION_RATIO': 'ENCODING_COMPRESSION_RATIO',
@@ -173,20 +166,12 @@ RENAMED = {'ENCODING_MIN_COMPRESSION_RATIO': 'ENCODING_COMPRESSION_RATIO',
            'ENCODING_COMPRESSION_RATIO'    : 'ENCODING_MAX_COMPRESSION_RATIO'}
 
 
-def version_label(version: str) -> pathlib.Path:
-    """The GO_0021 index label of one version of the metadata tree."""
-
-    return METADATA_VERSIONS / version / 'GO_0021_index.lbl'
+def test_index_label_has_rotated_ratios() -> None:
+    assert _ssi_labels.ratios_rotated(Pds3Label(INDEX)) is True
 
 
-@pytest.mark.parametrize('version', VERSIONS)
-def test_every_metadata_version_has_rotated_ratios(version: str) -> None:
-    assert _ssi_labels.ratios_rotated(Pds3Label(version_label(version))) is True
-
-
-@pytest.mark.parametrize('version', VERSIONS)
-def test_renamed_ratio_columns_are_corrected(version: str) -> None:
-    text = version_label(version).read_text()
+def test_renamed_ratio_columns_are_corrected() -> None:
+    text = INDEX.read_text()
     for (old, new) in RENAMED.items():
         text = text.replace(f'= {old}\n', f'= RENAMED_{new}\n')
     text = text.replace('= RENAMED_', '= ')

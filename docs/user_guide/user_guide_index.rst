@@ -10,9 +10,7 @@ images one at a time.
 It returns an iterator, which gives the Snapshots row by row, in the order of the index.
 The call itself checks the arguments and reads the PDS3 labels of the index and its
 supplement, so a wrong argument or a label that cannot be read raises an error at once.
-An index label that does not give ``INSTRUMENT_HOST_NAME``, as in the metadata tree's
-versions before v4, does not show that the index is an SSI index, so the call also
-reads the first row of the index to recognize it. The rows of the two
+The rows of the two
 tables are read as the iteration goes on, a few at a time, and each
 row's Snapshot is built when the iteration reaches that row. The memory used stays about
 the same however long the index is when the installed OOPS frees the frames and paths
@@ -159,8 +157,7 @@ through GO_0023, and the cumulative GO_0999, give nonzero ratios. Until the inde
 corrected, the host gives each value under the name of the ratio it holds, as the product
 label does. It decides this once for each index, from the order of the three columns'
 bytes in the row, which their ``START_BYTE`` values in the PDS3 label give: every SSI
-index label places them in the same order, in every version of the metadata tree,
-however recently it was made. An index whose label places the columns in another
+index label places them in the same order. An index whose label places the columns in another
 order, as a corrected one that renames them does, is taken to be corrected, and its
 values keep their column names. The order in which the label lists the columns does
 not matter, so a corrected label must change their names or their ``START_BYTE``
@@ -211,5 +208,4 @@ Reading an index through oops.Host
 
 :meth:`oops.host.Host.from_index` recognizes an SSI index from its label and passes it,
 with every other argument, to :meth:`~host_galileo.oops.ssi.GalileoSSI.from_index`,
-which reads and pairs the two tables itself. The two give the same Snapshots. An index
-whose label does not name its instrument is recognized from its first row.
+which reads and pairs the two tables itself. The two give the same Snapshots.

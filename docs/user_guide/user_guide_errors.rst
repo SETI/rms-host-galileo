@@ -103,10 +103,7 @@ Of the errors above, it can then raise only :exc:`TypeError`,
 and :exc:`OSError`.
 
 A table file that does not exist or cannot be read raises :exc:`OSError` when the
-iteration starts. The exception is an index whose label does not give
-``INSTRUMENT_HOST_NAME``, as in the metadata tree's versions before v4, whether or not
-it gives ``INSTRUMENT_ID``: the call reads the index's first row to recognize it as an
-SSI index, so a missing or unreadable index table raises :exc:`OSError` at the call.
+iteration starts.
 These errors are raised when the iteration reaches the row, and the iteration ends
 there:
 

@@ -553,10 +553,8 @@ class GalileoSSI(oops.Host):
 
         It reads a Ring-Moon Systems Node metadata index and its supplement. The call
         itself checks the arguments and reads the labels of the index and its
-        supplement, so that a wrong call fails at once. If the index label does not
-        give INSTRUMENT_HOST_NAME, as in the metadata versions before v4, the call also
-        reads the first row of the index, to recognize it as an SSI index. With
-        `row_dicts`, the call reads less, as described there. The rows of the two tables
+        supplement, so that a wrong call fails at once. With `row_dicts`, the call reads
+        less, as described there. The rows of the two tables
         are then read as the iteration proceeds, a few at a time, and each row's Snapshot
         is built when the iteration reaches that row. The memory used stays the same
         however long the index is only with an rms-oops that frees the frames and paths
@@ -733,9 +731,7 @@ class GalileoSSI(oops.Host):
             OSError: At call time, if the label of `filepath` (unless `label` is given)
                 or of the supplement does not exist or cannot be read
                 (FileNotFoundError for a missing supplement). When the iteration starts,
-                if a table file does not exist or cannot be read; at call time for the
-                index table, if the index label lacks INSTRUMENT_HOST_NAME, so that the
-                first row is read to recognize the index.
+                if a table file does not exist or cannot be read.
         """
 
         oops.Host._check_select(select, unit='row of a Galileo SSI index')
@@ -761,8 +757,7 @@ class GalileoSSI(oops.Host):
 
         # Read the index and the supplement as the iteration proceeds, a few rows at a
         # time, each index row paired with its supplement row and filtered. The call
-        # itself reads the labels, and the first index row only for a label without
-        # INSTRUMENT_HOST_NAME; with row_dicts, it does not read the supplement or the
+        # itself reads the labels; with row_dicts, it does not read the supplement or the
         # tables, and it skips the host check. Both tables also give
         # SPACECRAFT_CLOCK_START_COUNT, but the supplement writes it in the SPICE form
         # "RRRRRRRR:MM:S:T" and the index in the label form "RRRRRRRR.MM", so the default
@@ -1032,21 +1027,11 @@ class GalileoSSI(oops.Host):
         """True if the given index label refers to this host/instrument.
 
         The label of an RMS Node metadata index names the host and instrument at its top
-        level. For a label without the host's name this detector returns None, and the
-        host is judged from a row by :meth:`_detect_in_row`.
+        level.
         """
 
-        host = label.get('INSTRUMENT_HOST_NAME')
-        if host is not None:
-            return host.startswith('GALILEO') and label.get('INSTRUMENT_ID', '') == 'SSI'
-        return None
-
-    @staticmethod
-    def _detect_in_row(row_dict):
-        """True if the given row of an index file label refers to this host/instrument."""
-
-        return (row_dict.get('MISSION_NAME', '') == 'GALILEO'
-                and row_dict.get('INSTRUMENT_ID', '') == 'SSI')
+        return (label.get('INSTRUMENT_HOST_NAME', '').startswith('GALILEO')
+                and label.get('INSTRUMENT_ID', '') == 'SSI')
 
     ######################################################################################
     # Initialization
