@@ -193,6 +193,12 @@ class _Galileo:
                 newest kernels.
             irregulars (bool, optional): True to include the irregular satellites; False
                 otherwise.
+
+        Raises:
+            RuntimeError: If Saturn is among the planets and `asof` is a date from
+                2003-11-05 through 2004-04-26, because the frames kernel of Saturn's
+                small moons chosen for those dates has a malformed line that SPICE
+                rejects.
         """
 
         if _Galileo.initialized:

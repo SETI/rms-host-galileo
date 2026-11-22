@@ -103,6 +103,11 @@ built from the instrument kernel that the database chooses, before the fixed set
 furnished. The database lists a single SSI instrument kernel, the one in the fixed
 set, so the fields of view are the same whatever the date.
 
+When Saturn is among the planets, as it is by default, any date from 2003-11-05
+through 2004-04-26 makes ``initialize()`` raise :exc:`RuntimeError`, because the frames
+kernel of Saturn's small moons chosen for those dates has a malformed line that SPICE
+rejects.
+
 Image files and indexes
 =======================
 

@@ -1076,6 +1076,10 @@ class GalileoSSI(oops.Host):
 
         Raises:
             oops.host.HostError: If the instrument kernel does not give an 800x800 image.
+            RuntimeError: If Saturn is among the planets and `asof` is a date from
+                2003-11-05 through 2004-04-26, because the frames kernel of Saturn's
+                small moons chosen for those dates has a malformed line that SPICE
+                rejects.
         """
 
         # Quick exit after first call
