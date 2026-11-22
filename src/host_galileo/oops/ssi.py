@@ -586,7 +586,13 @@ class GalileoSSI(oops.Host):
                 unless `label` is given, because it tells whether the table writes the
                 compression ratios in rotated columns.
             pds3_options (dict[str, Any], optional): Any keyword arguments and their
-                values to be passed to the :class:`~pdsparser.Pds3Label` parser.
+                values to be passed to the :class:`~pdsparser.Pds3Label` parser. The
+                options are checked when the call is made, unless `row_dicts` is given,
+                when they are not used. The index's label is parsed with all of them, and
+                the supplement's label with the method alone. Each label is parsed with
+                one method, "fast" unless they give another, and no later method is
+                tried. (The index's label is still parsed with them, and so they are
+                still checked, when `row_dicts` is given and `label` is not.)
             filter (dict[str, Any], optional): A dictionary of index column names and
                 their values or a set or tuple of values. If provided, only rows of the
                 index in which each named column equals the value, falls in the set of
@@ -681,11 +687,14 @@ class GalileoSSI(oops.Host):
             TypeError: At call time, if a keyword argument is not one of those listed.
             oops.OopsTypeError: When the iteration reaches a row, if a range in `filter`
                 cannot be compared with the row's value.
-            oops.OopsValueError: At call time, if `select` is not None, if a value in
-                `pds3_options` is invalid, or if `filter` uses a column that neither
-                table has. With `row_dicts`, `filter` is checked against the first row:
-                at call time if `row_dicts` is a sequence, and when the iteration reads
-                the first row if it is an iterator.
+            oops.OopsValueError: At call time, if `select` is not None, or if `filter`
+                uses a column that neither table has. With `row_dicts`, `filter` is
+                checked against the first row: at call time if `row_dicts` is a
+                sequence, and when the iteration reads the first row if it is an
+                iterator. Also if `pds3_options` names a method the parser does not have
+                or an option it does not take. The call checks the options when it is
+                made, unless `row_dicts` is given. (It still checks them, by parsing the
+                index's label with them, when `row_dicts` is given and `label` is not.)
             oops.host.HostIndexError: At call time, if `supplement` is None or empty
                 while `row_dicts` is not given; if `supplement` is
                 `oops.Host.SUPPLEMENT` and the name of `filepath` contains no "_index";

@@ -75,10 +75,14 @@ called:
     A keyword argument is not one that the method accepts.
 
 :exc:`~oops.OopsValueError`
-    ``select`` is not None, ``filter`` holds a column that neither table has, or
-    ``pds3_options`` holds an option that the parser does not accept. When ``row_dicts``
-    is an iterator rather than a sequence, a ``filter`` column that its first row lacks
-    raises this error when the iteration reads that row.
+    ``select`` is not None, or ``filter`` holds a column that neither table has. When
+    ``row_dicts`` is an iterator rather than a sequence, a ``filter`` column that its
+    first row lacks raises this error when the iteration reads that row.
+
+    ``pds3_options`` names a method the parser does not have or an option it does not
+    take. The call checks the options when it is made, unless ``row_dicts`` is given.
+    (It still checks them, by parsing the index's label with them, when ``row_dicts`` is
+    given and ``label`` is not.)
 
 :exc:`~oops.host.WrongHostError`
     The file is not a Galileo SSI index. When the rows are given with ``row_dicts``,
