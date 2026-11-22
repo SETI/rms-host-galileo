@@ -59,8 +59,8 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   rms-host-new-horizons does, until oops has one helper for it (the issue is cited in
   the fixture's comment).
 - `test_files/metadata_versions/` holds the GO_0021 index label of every version of the
-  metadata tree that the holdings keep (v1.0 to v4 and the current one), for the tests
-  of `ratios_rotated()`.
+  metadata tree that the holdings keep (v1.0, v2.0, v3, v4 and the current one; v2.1's
+  label is byte-identical to v2.0's), for the tests of `ratios_rotated()`.
 
 ## Architecture gotchas
 
@@ -249,10 +249,13 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   (`SPICE_PATH`, or `$OOPS_RESOURCES/SPICE`, plus `SPICE_SQLITE_DB_NAME`). `spicedb`
   currently ships inside rms-oops.
 - `asof` reaches only the database choices: `Body.define_solar_system()` (LSK, PCK,
-  SPK), `furnish_inst()` (SCLK, FK, IK), and `spice_instrument_kernel()`. spicedb's
-  `redo=True` drops the date where nothing qualifies (a 2016 LSK under 1997-01-01),
-  `oops.spice.load_leap_seconds()` does not take a date, and `load_kernels()` furnishes
-  `_KERNELS` last, which overrides the database wherever they overlap (Jupiter, Io, and
+  SPK), `furnish_inst()` (SCLK, FK, IK), and `spice_instrument_kernel()`, each as the
+  one string `_Galileo._format_asof()` writes (`YYYY-MM-DDTHH:MM:SS`), since spicedb
+  compares the text with each release date-time. spicedb's `redo=True` drops the date
+  where nothing qualifies (a 2016 LSK under 1997-01-01). The undated LSK of
+  `oops.spice.load_leap_seconds()` is superseded by the dated one, but `load_kernels()`
+  furnishes `_KERNELS` last, naif0012 among them, which overrides the database wherever
+  they overlap (the leap seconds always come from naif0012, and Jupiter, Io, and
   Europa states are identical with and without `asof`). The FOVs are built from the
   dated `spice_instrument_kernel()` choice before `load_kernels()`, but SPICE.db lists
   only one SSI IK (gll36001.ti, the fixed one). Whether `asof` should change that is

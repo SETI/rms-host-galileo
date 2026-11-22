@@ -144,9 +144,9 @@ type whichever label it came from.
     including ``HOST`` and ``BHOST``, the machines that wrote the file. The one
     exception is a parsed image passed in without a file path: the host has only the
     header that the image holds, whose ``HOST`` and ``BHOST`` give the machine that read
-    it (see :doc:`user_guide_files`). A parameter that occurs more than once, such as the ``TASK`` of each step of the processing history,
-    is keyed by its name and its occurrence counted from zero: ``TASK[0]``, ``TASK[1]``,
-    and so on.
+    it (see :doc:`user_guide_files`). A parameter that occurs more than once, such as
+    the ``TASK`` of each step of the processing history, is keyed by its name and its
+    occurrence counted from zero: ``TASK[0]``, ``TASK[1]``, and so on.
 
 Subfields
 =========
@@ -191,5 +191,6 @@ VICAR header it is formed from ``RIM`` and ``MOD91``. The header's finer fields,
 ``MOD10`` and ``MOD8``, are in ``dict`` and ``header_dict`` when the image file was
 read, and they are the same whether the image file or its label was given. An
 astrometry read of the label reads only the PDS3 label, which does not give these
-fields, so it leaves both out. To get them from a label, read it without ``astrometry``. Neither
-label gives a stop count, so there is no ``spacecraft_clock_stop_count`` subfield.
+fields, so it leaves both out. To get them from a label, read it without
+``astrometry``. The labels give only a start count, so the subfields include
+``spacecraft_clock_start_count`` alone.

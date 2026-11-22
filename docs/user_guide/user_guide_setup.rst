@@ -82,19 +82,19 @@ only Jupiter, planet 5, and its moons:
 
    GalileoSSI.initialize(planets=(5,))
 
-The ``asof`` option takes a date, and asks the database for the kernels that existed
-before it. It changes less than that suggests:
+The ``asof`` option takes a date, and the kernels released before that date are used.
+It changes less than that suggests:
 
-- The fixed set of kernels ignores the date, and it overrides the database's choices
-  wherever the two overlap. The leap seconds, the SSI instrument, frame, and
+- The fixed set of kernels is loaded without the date, and last, so it overrides the
+  database's choices wherever the two overlap. The SSI instrument, frame, and
   spacecraft clock kernels, the C kernels, and every ephemeris in the fixed set are the
   same whatever the date. For example, the positions of Jupiter, Io, and Europa seen
   from Galileo are the same with ``asof='1997-01-01'`` as without a date.
-- The first leap-second kernel is loaded without the date, so it is always the latest
-  one.
-- Where the database does not list a kernel of some kind from before the date, it
-  chooses as if no date were given, without a warning. With ``asof='1997-01-01'``, for
-  example, the database chooses the leap-second kernel of 2016.
+- The leap seconds come from the fixed set's leap-second kernel, naif0012, which is
+  loaded last, so they are the same whatever the date.
+- Where none of the kernels of some kind was released before the date, the one that
+  would be chosen without a date is used instead, silently. Where some kernels of a
+  kind were released before the date, only those are used.
 
 The date can change the planetary constants and the ephemerides of bodies that the
 fixed set does not cover. It could also change the camera's fields of view, which are

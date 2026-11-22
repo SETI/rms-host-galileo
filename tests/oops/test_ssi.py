@@ -293,6 +293,15 @@ def test_initialize_loads_the_mission(fake_spice: FakeSpice,
     assert GalileoSSI._initialized
 
 
+def test_initialize_gives_every_query_the_same_date(fake_spice: FakeSpice,
+                                                    fake_spicedb: FakeSpiceDB) -> None:
+    GalileoSSI.initialize(asof='2000-01-01')
+    dates = [kwargs['asof'] for (_, kwargs) in fake_spice.solar_system]
+    dates += [kwargs['asof'] for name in ('furnish_inst', 'select_inst')
+              for (_, kwargs) in fake_spicedb.named(name)]
+    assert dates == ['2000-01-01T00:00:00'] * 3
+
+
 def test_initialize_rejects_an_unexpected_image_shape(fake_spicedb: FakeSpiceDB) -> None:
     fake_spicedb.kernel_dict['INS'][-77036]['MAX_LINE'] = 400
     with pytest.raises(oops.host.HostError,

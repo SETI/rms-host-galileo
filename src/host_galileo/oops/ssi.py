@@ -1057,16 +1057,18 @@ class GalileoSSI(oops.Host):
                 planet, from 1 for Mercury to 9 for Pluto, or a sequence of such numbers,
                 such as (5,) for Jupiter alone; each planet and its moons are defined
                 through :meth:`~oops.Body.define_solar_system`. None or 0 means all.
-            asof (str, optional): A date, so that the database chooses the kernels
-                that existed before it: the planetary constants and ephemerides that
-                define the bodies, and the SSI instrument kernel with its frame and
-                spacecraft clock kernels. None to ignore. Where the database does not
-                list a kernel of some kind from before the date, it chooses as if no date
-                were given. The first leap-second kernel is loaded without the date, and
-                the fixed set of kernels ignores it; the fixed set is furnished last, so
-                it overrides the database's choices wherever the two overlap. The fields
-                of view are built from the instrument kernel that the database chooses,
-                before the fixed set is furnished.
+            asof (str, optional): A date in ISO format; the kernels released before it
+                are used for the planetary constants and ephemerides that define the
+                bodies, and for the SSI instrument kernel with its frame and spacecraft
+                clock kernels. None to choose the newest kernels. Where none of the
+                kernels that a query could choose was released before the date, spicedb
+                silently uses the one it would choose without a date. A query that finds
+                some kernels released before the date uses only those. The fields of
+                view are built from the instrument kernel chosen by the date. The fixed
+                set of kernels, which holds the spacecraft's C and SP kernels, is loaded
+                without the date and last, so it overrides the database's choices
+                wherever the two overlap; its leap-second kernel, naif0012, decides the
+                leap seconds whatever the date.
             irregulars (bool, optional): True to include the irregular satellites; False
                 otherwise.
 
