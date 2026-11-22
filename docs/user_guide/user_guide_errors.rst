@@ -49,7 +49,8 @@ Reading an image file
 
 :exc:`~oops.OopsValueError`
     ``select`` is not None, or ``pds3_options`` holds an option that the parser does not
-    accept.
+    accept. The options are checked only when the method parses a PDS3 label file, so
+    they are not checked for a VICAR file or for a label passed in already parsed.
 
 :exc:`OSError`
     A file cannot be read.

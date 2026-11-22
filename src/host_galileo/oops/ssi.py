@@ -280,9 +280,10 @@ class GalileoSSI(oops.Host):
                 where <time> is that time without the seconds of an "F" timeshift, and
                 the cause of either is the SPICE exception.
             TypeError: If a keyword argument is not one of those listed.
-            oops.OopsValueError: If `select` is not None, or if `pds3_options` names a
-                parser method other than fast, strict, and loose that the parser rejects,
-                or another invalid option.
+            oops.OopsValueError: If `select` is not None, or if `pds3_options` holds an
+                option that the PDS3 label parser does not accept while the method parses
+                a PDS3 label file; the options are not checked for a VICAR file or for a
+                Pds3Label passed in.
             oops.host.PdsHostError: If none of the fast, strict, and loose parsers can
                 read the PDS3 label, or if it has no IMAGE pointer.
             oops.host.VicarHostError: If the VICAR header or image cannot be parsed,
@@ -1057,18 +1058,19 @@ class GalileoSSI(oops.Host):
                 planet, from 1 for Mercury to 9 for Pluto, or a sequence of such numbers,
                 such as (5,) for Jupiter alone; each planet and its moons are defined
                 through :meth:`~oops.Body.define_solar_system`. None or 0 means all.
-            asof (str, optional): A date in ISO format; the kernels released before it
-                are used for the planetary constants and ephemerides that define the
-                bodies, and for the SSI instrument kernel with its frame and spacecraft
-                clock kernels. None to choose the newest kernels. Where none of the
-                kernels that a query could choose was released before the date, spicedb
-                silently uses the one it would choose without a date. A query that finds
-                some kernels released before the date uses only those. The fields of
-                view are built from the instrument kernel chosen by the date. The fixed
-                set of kernels, which holds the spacecraft's C and SP kernels, is loaded
+            asof (str, optional): A date in ISO format. Each kernel is chosen from
+                those released no later than the start (00:00) of that date, the leap
+                seconds kernel included, and a query of which every kernel was released
+                after the start of the date silently uses the kernel it would choose
+                without a date. A query that finds some kernels keeps only those
+                released by the start of the date. The date chooses the planetary
+                constants and ephemerides that define the bodies, and the SSI instrument
+                kernel with its frame and spacecraft clock kernels; the fields of view
+                are built from the instrument kernel it chooses. The fixed set of
+                kernels, which holds the spacecraft's C and SP kernels, is loaded
                 without the date and last, so it overrides the database's choices
-                wherever the two overlap; its leap-second kernel, naif0012, decides the
-                leap seconds whatever the date.
+                wherever the two overlap; its leap seconds kernel, naif0012, decides the
+                leap seconds whatever the date. None to choose the newest kernels.
             irregulars (bool, optional): True to include the irregular satellites; False
                 otherwise.
 
