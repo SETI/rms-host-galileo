@@ -227,7 +227,11 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
 - `GalileoSSI.from_index()` returns an iterator. It checks its arguments and reads the
   labels, then returns a generator that builds
   each row's Snapshot when the iteration reaches it. It must not be a generator
-  function, which would defer every call-time error to the first `next()`.
+  function, which would defer every call-time error to the first `next()`. With
+  `row_dicts`, `_index_rows()` returns the given rows before any read or check, so the
+  call reads only the index label for `ratios_rotated()` (and not that when `label` is
+  given): the supplement label, the host check, and the column checks are skipped, and
+  `pds3_options` is checked only by that one parse.
 - The hosts apply the standard overrides through `oops.Host._apply_overrides()`, passing
   them to `_make_snapshot()` as one `overrides` dict, as rms-host-cassini does.
 - TARGET_NAME repairs and the star targets that become light sources are in `ssi.py`
@@ -236,6 +240,18 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   `spicedb.get_spice_filecache_prefix()`, and the instrument kernel through `spicedb`
   (`SPICE_PATH`, or `$OOPS_RESOURCES/SPICE`, plus `SPICE_SQLITE_DB_NAME`). `spicedb`
   currently ships inside rms-oops.
+- `asof` reaches only the database choices: `Body.define_solar_system()` (LSK, PCK,
+  SPK), `furnish_inst()` (SCLK, FK, IK), and `spice_instrument_kernel()`, each as the
+  one string `_Galileo._format_asof()` writes (`YYYY-MM-DDTHH:MM:SS`), since spicedb
+  compares the text with each release date-time. spicedb's `redo=True` drops the date
+  where nothing qualifies (a 2016 LSK under 1997-01-01). The undated LSK of
+  `oops.spice.load_leap_seconds()` is superseded by the dated one, but `load_kernels()`
+  furnishes `_KERNELS` last, naif0012 among them, which overrides the database wherever
+  they overlap (the leap seconds always come from naif0012, and Jupiter, Io, and
+  Europa states are identical with and without `asof`). The FOVs are built from the
+  dated `spice_instrument_kernel()` choice before `load_kernels()`, but SPICE.db lists
+  only one SSI IK (gll36001.ti, the fixed one). Whether `asof` should change that is
+  an open operator question; do not change the load order without a ruling.
 
 ## Repo etiquette
 

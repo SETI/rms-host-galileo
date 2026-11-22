@@ -69,7 +69,8 @@ class GalileoSSI(Host):
     # read with its supplement. The supplement is required: None or an empty path raises
     # oops.host.HostIndexError unless row_dicts is given. select must be None
     # (oops.OopsValueError), and any other keyword raises Python's TypeError. The call
-    # reads only the labels; the iterator reads the two
+    # reads the labels; with row_dicts it reads only the index label (and not that
+    # if label is given) and skips the host check. The iterator reads the two
     # tables a few rows at a time, pairs each index row with the supplement row in the
     # same position, builds each row's Snapshot when it reaches the row, and ends at the
     # first row that raises. Rows whose files differ raise oops.host.HostIndexError there.

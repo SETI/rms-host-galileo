@@ -284,6 +284,15 @@ def test_initialize_loads_the_mission(fake_spice: FakeSpice,
     assert GalileoSSI._initialized
 
 
+def test_initialize_gives_every_query_the_same_date(fake_spice: FakeSpice,
+                                                    fake_spicedb: FakeSpiceDB) -> None:
+    GalileoSSI.initialize(asof='2000-01-01')
+    dates = [kwargs['asof'] for (_, kwargs) in fake_spice.solar_system]
+    dates += [kwargs['asof'] for name in ('furnish_inst', 'select_inst')
+              for (_, kwargs) in fake_spicedb.named(name)]
+    assert dates == ['2000-01-01T00:00:00'] * 3
+
+
 def test_initialize_rejects_an_unexpected_image_shape(fake_spicedb: FakeSpiceDB) -> None:
     fake_spicedb.kernel_dict['INS'][-77036]['MAX_LINE'] = 400
     with pytest.raises(oops.host.HostError,
@@ -627,7 +636,7 @@ def test_from_file_vicar_reads_the_clock(tmp_path: pathlib.Path, key: str) -> No
     assert obs.dict[key] == _CLOCK[key]
 
 
-# An astrometry read of the label reads only the label, which holds neither field
+# An astrometry read of the label reads only the label, which does not give these fields
 @pytest.mark.parametrize('key', ['MOD10', 'MOD8'])
 def test_from_file_pds3_astrometry_lacks_the_finer_clock(tmp_path: pathlib.Path,
                                                          key: str) -> None:
@@ -2039,6 +2048,24 @@ def test_from_index_rows_need_no_supplement(tmp_path: pathlib.Path) -> None:
     index = write_index(tmp_path)
     assert len(list(GalileoSSI.from_index(index, row_dicts=index_rows(index),
                                           supplement=None))) == 3
+
+
+def test_from_index_given_rows_skip_the_supplement_label(tmp_path: pathlib.Path) -> None:
+    """With the default supplement, which does not exist, the given rows still load."""
+
+    index = write_index(tmp_path)
+    assert len(list(GalileoSSI.from_index(index, row_dicts=index_rows(index)))) == 3
+
+
+def test_from_index_given_rows_skip_the_host_check(tmp_path: pathlib.Path) -> None:
+    """The label of another host's index raises nothing when the rows are given."""
+
+    (tmp_path / 'ssi').mkdir()
+    rows = index_rows(write_index(tmp_path / 'ssi'))
+    path = write_table(tmp_path, 'GO_0017_index', 'IMAGE_INDEX_TABLE', _INDEX_COLUMNS,
+                       _INDEX_ROWS, MISSION_NAME='CASSINI',
+                       INSTRUMENT_HOST_NAME='CASSINI', INSTRUMENT_ID='ISS')
+    assert len(list(GalileoSSI.from_index(path, row_dicts=rows))) == 3
 
 
 def test_from_index_given_rows_need_the_label(tmp_path: pathlib.Path) -> None:

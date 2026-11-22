@@ -44,7 +44,7 @@ def test_initialize_defines_the_solar_system_and_spacecraft(
         fake_spice: FakeSpice) -> None:
     _Galileo.initialize(planets=[5], asof='2000-01-01', irregulars=False)
     assert fake_spice.solar_system == [(('1989-10-18', '2003-09-21'),
-                                        {'asof': '2000-01-01', 'planets': [5],
+                                        {'asof': '2000-01-01T00:00:00', 'planets': [5],
                                          'irregulars': False})]
     assert fake_spice.spice_paths == [('GLL', 'JUPITER')]
     assert fake_spice.leap_seconds == 1

@@ -81,8 +81,8 @@ The ``header_dict`` subfield holds the VICAR header as the file writes it. A
 :class:`~vicar.VicarImage` sets its ``HOST`` and ``BHOST`` to the machine that read it,
 so when a :class:`~vicar.VicarImage` that has a file path is passed in, the host reads
 the header again from that file. A :class:`~vicar.VicarImage` made by
-:meth:`vicar.VicarImage.from_file` lacks the path of its file, so the host has only the header
-that it holds, and its ``header_dict`` gives the reading machine as ``HOST`` and
+:meth:`vicar.VicarImage.from_file` lacks the path of its file, so the host has only the
+header that it holds, and its ``header_dict`` gives the reading machine as ``HOST`` and
 ``BHOST``.
 
 Parsed input can also be passed to :meth:`oops.host.Host.from_file`, which identifies it

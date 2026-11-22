@@ -151,9 +151,9 @@ class GalileoSSI(oops.Host):
         SUB_SPACECRAFT_AZIMUTH (NORAZ, SUNAZ, and SCAZ). One value of a group alone at 0
         is kept. A negative HORIZONTAL_PIXEL_SCALE (HSCL), VERTICAL_PIXEL_SCALE (VSCL), or
         SLANT_DISTANCE (SLRANGE), which is never real, counts as no value too. The time
-        from closest approach, which the labels before the Jupiter
-        tour call TIME_FROM_CLOSEST_APPROACH and SATELLITE_TIME_FROM_CLST_APR, is given
-        under the tour labels' names, NTV_TIME_FROM_CLOSEST_APPROACH and
+        from closest approach, which the labels before the Jupiter tour call
+        TIME_FROM_CLOSEST_APPROACH and SATELLITE_TIME_FROM_CLST_APR, is given under the
+        tour labels' names, NTV_TIME_FROM_CLOSEST_APPROACH and
         NTV_SAT_TIME_FROM_CLOSEST_APRH, which the header's TCA also takes.
 
         Where both labels give a value and they differ, each item takes its value from
@@ -280,9 +280,10 @@ class GalileoSSI(oops.Host):
                 where <time> is that time without the seconds of an "F" timeshift, and
                 the cause of either is the SPICE exception.
             TypeError: If a keyword argument is not one of those listed.
-            oops.OopsValueError: If `select` is not None, or if `pds3_options` names a
-                parser method other than fast, strict, and loose that the parser rejects,
-                or another invalid option.
+            oops.OopsValueError: If `select` is not None, or if `pds3_options` holds an
+                option that the PDS3 label parser does not accept while the method parses
+                a PDS3 label file; the options are not checked for a VICAR file or for a
+                Pds3Label passed in.
             oops.host.PdsHostError: If none of the fast, strict, and loose parsers can
                 read the PDS3 label, or if it has no IMAGE pointer.
             oops.host.VicarHostError: If the VICAR header or image cannot be parsed,
@@ -552,15 +553,18 @@ class GalileoSSI(oops.Host):
 
         It reads a Ring-Moon Systems Node metadata index and its supplement. The call
         itself checks the arguments and reads the labels of the index and its
-        supplement, so that a wrong call fails at once. The rows of the two tables are
-        then read as the iteration proceeds, a few at a time, and each row's Snapshot is
-        built when the iteration reaches that row. The memory used stays the same
+        supplement, so that a wrong call fails at once. With `row_dicts`, the call reads
+        less, as described there. The rows of the two tables
+        are then read as the iteration proceeds, a few at a time, and each row's Snapshot
+        is built when the iteration reaches that row. The memory used stays the same
         however long the index is only with an rms-oops that frees the frames and paths
         built for each row once its Snapshot is gone; with one that keeps them, it grows
         a little with each row. An error in a row is raised when the iteration
         reaches it, after every earlier row has been yielded (except for a row longer
-        than its label says, as described below), and the iteration ends there;
-        `filter` can leave such a row out.
+        than its label says, as described below), and the iteration ends there.
+        `filter` can leave out a row whose Snapshot would raise, but it cannot avoid an
+        error in reading or pairing the rows of the tables, because the rows are
+        filtered only after they have been read and paired.
 
         Every SSI index lists its files in the same order as its supplement, so the two
         tables are read in step and each index row is paired with the supplement row in
@@ -582,9 +586,13 @@ class GalileoSSI(oops.Host):
             row_dicts (collections.abc.Iterable[dict[str, Any]], optional): The rows of
                 the index, each already merged with its supplement row, if the tables
                 have already been read. They are iterated over in place of the tables,
-                and `supplement` is not used. The label of `filepath` is still read,
-                unless `label` is given, because it tells whether the table writes the
-                compression ratios in rotated columns.
+                and `supplement` is not used. The call then reads only the label of
+                `filepath`, because it tells whether the table writes the compression
+                ratios in rotated columns, and does not read even that if `label` is
+                given. It does not read the supplement's label or either table, does not
+                check that the index is an SSI index, and does not check the tables'
+                columns, so the call-time errors below that come from those reads and
+                checks are not raised.
             pds3_options (dict[str, Any], optional): Any keyword arguments and their
                 values to be passed to the :class:`~pdsparser.Pds3Label` parser. The
                 options are checked when the call is made, unless `row_dicts` is given,
@@ -667,10 +675,10 @@ class GalileoSSI(oops.Host):
             N, and a PRODUCT_VERSION_ID of 0. Where the index label names the three
             compression-ratio columns in the order of their bytes that every SSI index
             label has used, the values are given under the names of the ratios they hold,
-            as the product labels give them. The DATA_SET_ID of an
-            image of the Jupiter tour has the version 1.1 of the product labels, where
-            the current indexes write 1.0. NTV_SAT_TIME_FROM_CLOSEST_APR is given under
-            the labels' name, NTV_SAT_TIME_FROM_CLOSEST_APRH.
+            as the product labels give them. The DATA_SET_ID of an image of the Jupiter
+            tour has the version 1.1 of the product labels, where the current indexes
+            write 1.0. NTV_SAT_TIME_FROM_CLOSEST_APR is given under the labels' name,
+            NTV_SAT_TIME_FROM_CLOSEST_APRH.
             The C kernels are checked for pointing when the Snapshot is built, but a
             failed check does not raise: for an image whose pointing they cannot supply,
             the default frame raises oops.OopsSpiceError when it is evaluated. A `frame`
@@ -716,14 +724,14 @@ class GalileoSSI(oops.Host):
                 count while its FRAME_DURATION is not one of the SSI frame durations.
             oops.OopsSpiceError: When the iteration reaches a row whose time must come
                 from the spacecraft clock count and the clock kernel cannot convert it.
-            oops.host.PdsHostError: At call time, if the label of the index or of the
-                supplement cannot be parsed.
+            oops.host.PdsHostError: At call time, if the label of the index (unless
+                `label` is given) or of the supplement cannot be parsed.
             oops.host.WrongHostError: At call time, if `filepath` is not a Galileo SSI
-                index. With `row_dicts`, the index is not checked.
-            OSError: At call time, if the label of `filepath` or of the supplement does
-                not exist or cannot be read (FileNotFoundError for a missing
-                supplement). When the iteration starts, if a table file does not exist or
-                cannot be read. With `row_dicts`, the index table is not read.
+                index.
+            OSError: At call time, if the label of `filepath` (unless `label` is given)
+                or of the supplement does not exist or cannot be read
+                (FileNotFoundError for a missing supplement). When the iteration starts,
+                if a table file does not exist or cannot be read.
         """
 
         oops.Host._check_select(select, unit='row of a Galileo SSI index')
@@ -749,7 +757,8 @@ class GalileoSSI(oops.Host):
 
         # Read the index and the supplement as the iteration proceeds, a few rows at a
         # time, each index row paired with its supplement row and filtered. The call
-        # itself reads only the labels. Both tables also give
+        # itself reads the labels; with row_dicts, it does not read the supplement or the
+        # tables, and it skips the host check. Both tables also give
         # SPACECRAFT_CLOCK_START_COUNT, but the supplement writes it in the SPICE form
         # "RRRRRRRR:MM:S:T" and the index in the label form "RRRRRRRR.MM", so the default
         # validation, which compares every shared column, would reject every real pair
@@ -1042,13 +1051,28 @@ class GalileoSSI(oops.Host):
                 planet, from 1 for Mercury to 9 for Pluto, or a sequence of such numbers,
                 such as (5,) for Jupiter alone; each planet and its moons are defined
                 through :meth:`~oops.Body.define_solar_system`. None or 0 means all.
-            asof (str, optional): Only use SPICE kernels that existed before this date;
-                None to ignore.
+            asof (str, optional): A date in ISO format. Each kernel is chosen from
+                those released no later than the start (00:00) of that date, the leap
+                seconds kernel included, and a query of which every kernel was released
+                after the start of the date silently uses the kernel it would choose
+                without a date. A query that finds some kernels keeps only those
+                released by the start of the date. The date chooses the planetary
+                constants and ephemerides that define the bodies, and the SSI instrument
+                kernel with its frame and spacecraft clock kernels; the fields of view
+                are built from the instrument kernel it chooses. The fixed set of
+                kernels, which holds the spacecraft's C and SP kernels, is loaded
+                without the date and last, so it overrides the database's choices
+                wherever the two overlap; its leap seconds kernel, naif0012, decides the
+                leap seconds whatever the date. None to choose the newest kernels.
             irregulars (bool, optional): True to include the irregular satellites; False
                 otherwise.
 
         Raises:
             oops.host.HostError: If the instrument kernel does not give an 800x800 image.
+            RuntimeError: If Saturn is among the planets and `asof` is a date from
+                2003-11-05 through 2004-04-26, because the frames kernel of Saturn's
+                small moons chosen for those dates has a malformed line that SPICE
+                rejects.
         """
 
         # Quick exit after first call

@@ -49,7 +49,8 @@ Reading an image file
 
 :exc:`~oops.OopsValueError`
     ``select`` is not None, or ``pds3_options`` holds an option that the parser does not
-    accept.
+    accept. The options are checked only when the method parses a PDS3 label file, so
+    they are not checked for a VICAR file or for a label passed in already parsed.
 
 :exc:`OSError`
     A file cannot be read.
@@ -85,16 +86,26 @@ called:
     given and ``label`` is not.)
 
 :exc:`~oops.host.WrongHostError`
-    The file is not a Galileo SSI index. When the rows are given with ``row_dicts``,
-    this is not checked.
+    The file is not a Galileo SSI index.
 
 :exc:`OSError`
     The label of the index or of a named supplement does not exist or cannot be read.
 
+When ``label`` is given, the index's label is not read again, so the errors above that
+come from reading it are not raised. The options in ``pds3_options`` are still checked,
+unless ``row_dicts`` is given.
+
+When the rows are given with ``row_dicts``, the call reads the index's label, unless
+``label`` is given, and nothing else. It does not read the supplement or either table,
+does not check that the index is an SSI index, and does not check the tables' columns.
+Of the errors above, it can then raise only :exc:`TypeError`,
+:exc:`~oops.OopsValueError`, and, from the index's label, :exc:`~oops.host.PdsHostError`
+and :exc:`OSError`.
+
 A table file that does not exist or cannot be read raises :exc:`OSError` when the
-iteration starts. When the rows are given with ``row_dicts``, the index table is not
-read at all. These errors are raised when the iteration reaches the row, and the
-iteration ends there:
+iteration starts.
+These errors are raised when the iteration reaches the row, and the iteration ends
+there:
 
 :exc:`~oops.host.HostIndexError`
     The index row and the supplement row in the same position give different images; the

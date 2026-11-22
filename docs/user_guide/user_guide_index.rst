@@ -19,8 +19,9 @@ memory grows a little with each row. An error in a row is raised when the iterat
 reaches it, after the rows before it, and the iteration ends there: the rows after it
 are not given. The one exception is a row longer than its label says, whose error comes
 a few rows early, as described below. The ``filter`` argument, described below, can
-leave out a row whose Snapshot cannot be built. To build every row at once, pass the
-iterator to ``list()``:
+leave out a row whose Snapshot would raise, but it cannot avoid an error in reading or
+pairing the rows of the tables, because the rows are filtered only after they have been
+read and paired. To build every row at once, pass the iterator to ``list()``:
 
 .. code-block:: python
 
@@ -80,10 +81,13 @@ Other arguments
 ``row_dicts``
     The rows themselves, one dictionary per row, if the tables have already been read,
     each row already merged with its supplement row. Any iterable works, and the host
-    takes the rows one at a time as the iteration needs them. The host then reads
-    neither table, and ``supplement`` is not used. It still reads the index's PDS3
-    label, unless ``label`` is given, because the label tells whether the table writes
-    the compression ratios in rotated columns (see below). A value that a table declares
+    takes the rows one at a time as the iteration needs them. The call then reads only
+    the index's PDS3 label, because the label tells whether the table writes the
+    compression ratios in rotated columns (see below), and it does not read even that
+    when ``label`` is given. It does not read the supplement or either table, does not
+    check that the index is an SSI index, and does not check the tables' columns, so the
+    errors that those reads and checks raise at the call do not occur; ``supplement`` is
+    not used. A value that a table declares
     as its column's null or not-applicable constant, such as an
     ``ICT_DESPIKE_THRESHOLD`` of -1, is left out only when the row also carries the mask
     that the table reader adds for it, under the column's name followed by ``_mask``. A
