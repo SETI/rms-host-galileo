@@ -161,9 +161,9 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   renames the three compression ratios (`_INDEX_RATIO_COLUMNS`), which every SSI index
   writes in rotated columns. `ratios_rotated()` decides that once per table from the
   order of the column names in the index label alone (MIN, MAX, RATIO in byte order):
-  every version of the metadata tree, each made again with a new
-  `PRODUCT_CREATION_TIME`, kept that order and the rotated values, and the requested
-  correction renames the columns. It gives the tour's `DATA_SET_ID` the labels' version
+  every version of the metadata tree kept that order and the rotated values (each
+  version's index label differs from the others, except that v2.1's is byte-identical
+  to v2.0's), and the requested correction renames the columns. It gives the tour's `DATA_SET_ID` the labels' version
   1.1 (`_INDEX_VALUE_REPAIRS`) and the shortened `NTV_SAT_TIME_FROM_CLOSEST_APR` the
   labels' name (`_INDEX_NAMES`); both leave a corrected row as it is. Each index
   workaround's comment names its rms-data-projects item.

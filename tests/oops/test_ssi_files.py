@@ -162,9 +162,8 @@ def test_merge_takes_the_label_central_body_distance() -> None:
 
 # The GO_0021 index label of each version of the metadata tree that the holdings keep,
 # written from 2018 to 2025, and every one names the ratio columns in the rotated order
-# over rotated values. Each version but one made the label again, with a new
-# PRODUCT_CREATION_TIME; GO_0xxx_v2.1 kept GO_0xxx_v2.0's label, byte for byte, so it is
-# covered by v2.0's.
+# over rotated values. Each version's label differs from the others, except that
+# GO_0xxx_v2.1's label is byte-identical to GO_0xxx_v2.0's, so v2.0's covers it.
 METADATA_VERSIONS = TEST_FILES / 'metadata_versions'
 VERSIONS = ['GO_0xxx_v1.0', 'GO_0xxx_v2.0', 'GO_0xxx_v3', 'GO_0xxx_v4', 'GO_0xxx']
 

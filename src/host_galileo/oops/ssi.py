@@ -151,9 +151,9 @@ class GalileoSSI(oops.Host):
         SUB_SPACECRAFT_AZIMUTH (NORAZ, SUNAZ, and SCAZ). One value of a group alone at 0
         is kept. A negative HORIZONTAL_PIXEL_SCALE (HSCL), VERTICAL_PIXEL_SCALE (VSCL), or
         SLANT_DISTANCE (SLRANGE), which is never real, counts as no value too. The time
-        from closest approach, which the labels before the Jupiter
-        tour call TIME_FROM_CLOSEST_APPROACH and SATELLITE_TIME_FROM_CLST_APR, is given
-        under the tour labels' names, NTV_TIME_FROM_CLOSEST_APPROACH and
+        from closest approach, which the labels before the Jupiter tour call
+        TIME_FROM_CLOSEST_APPROACH and SATELLITE_TIME_FROM_CLST_APR, is given under the
+        tour labels' names, NTV_TIME_FROM_CLOSEST_APPROACH and
         NTV_SAT_TIME_FROM_CLOSEST_APRH, which the header's TCA also takes.
 
         Where both labels give a value and they differ, each item takes its value from
@@ -671,10 +671,10 @@ class GalileoSSI(oops.Host):
             N, and a PRODUCT_VERSION_ID of 0. Where the index label names the three
             compression-ratio columns in the order of their bytes that every SSI index
             label has used, the values are given under the names of the ratios they hold,
-            as the product labels give them. The DATA_SET_ID of an
-            image of the Jupiter tour has the version 1.1 of the product labels, where
-            the current indexes write 1.0. NTV_SAT_TIME_FROM_CLOSEST_APR is given under
-            the labels' name, NTV_SAT_TIME_FROM_CLOSEST_APRH.
+            as the product labels give them. The DATA_SET_ID of an image of the Jupiter
+            tour has the version 1.1 of the product labels, where the current indexes
+            write 1.0. NTV_SAT_TIME_FROM_CLOSEST_APR is given under the labels' name,
+            NTV_SAT_TIME_FROM_CLOSEST_APRH.
             The C kernels are checked for pointing when the Snapshot is built, but a
             failed check does not raise: for an image whose pointing they cannot supply,
             the default frame raises oops.OopsSpiceError when it is evaluated. A `frame`
@@ -694,9 +694,9 @@ class GalileoSSI(oops.Host):
             oops.OopsValueError: At call time, if `select` is not None, if a value in
                 `pds3_options` is invalid while `label` is not given, or if `filter`
                 uses a column that neither table has. With `row_dicts`, `filter` is
-                checked against the first row:
-                at call time if `row_dicts` is a sequence, and when the iteration reads
-                the first row if it is an iterator.
+                checked against the first row: at call time if `row_dicts` is a
+                sequence, and when the iteration reads the first row if it is an
+                iterator.
             oops.host.HostIndexError: At call time, if `supplement` is None or empty
                 while `row_dicts` is not given; if `supplement` is
                 `oops.Host.SUPPLEMENT` and the name of `filepath` contains no "_index";

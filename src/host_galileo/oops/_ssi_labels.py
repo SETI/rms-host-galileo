@@ -170,10 +170,10 @@ _INDEX_RATIO_COLUMNS = {
 # metadata tree, v1.0 to v4, written from 2018 to 2024; the indexes were made again
 # several times, with new PRODUCT_CREATION_TIMEs and new byte positions, and every
 # version lists the columns in this order and has the rotated values (GO_0017 and
-# GO_0021: the value under
-# ENCODING_COMPRESSION_RATIO exceeds the one under ENCODING_MAX_COMPRESSION_RATIO in 507
-# of the 508 and in all 322-328 rows with three different nonzero ratios). The correction
-# asked for renames the three columns and leaves the values in place
+# GO_0021: the value under ENCODING_COMPRESSION_RATIO exceeds the one under
+# ENCODING_MAX_COMPRESSION_RATIO in 507 of the 508 and in all 322-328 rows with three
+# different nonzero ratios). The correction asked for renames the three columns and
+# leaves the values in place
 # (rms-data-projects #258, item 8), which changes this order.
 _ROTATED_RATIO_ORDER = ('ENCODING_MIN_COMPRESSION_RATIO',
                         'ENCODING_MAX_COMPRESSION_RATIO',
