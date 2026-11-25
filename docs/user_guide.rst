@@ -281,10 +281,8 @@ Errors
 ------
 
 Every failure to read or interpret a label or an image file raises an error from
-:mod:`oops.host` that names the file, with one exception: when ``oops.Host.from_file``
-identifies the file as a VICAR image, an image file that is shorter than its header says
-raises a :class:`ValueError` instead of ``VicarHostError``. The same file read through
-:meth:`~host_galileo.oops.ssi.GalileoSSI.from_file` raises ``VicarHostError``.
+:mod:`oops.host` that names the file, whether the file is read through
+``oops.Host.from_file`` or through :meth:`~host_galileo.oops.ssi.GalileoSSI.from_file`.
 
 .. list-table::
    :header-rows: 1
