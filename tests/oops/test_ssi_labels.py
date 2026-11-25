@@ -166,6 +166,11 @@ def test_header_items_give_no_time_for_the_year_fill() -> None:
     assert 'IMAGE_TIME' not in _ssi_labels.header_items(header(*params))
 
 
+def test_header_items_give_no_time_for_all_fields_zero() -> None:
+    params = [(name, 0) for (name, _) in _SCET]
+    assert 'IMAGE_TIME' not in _ssi_labels.header_items(header(*params))
+
+
 def test_header_items_give_no_time_without_every_field() -> None:
     assert 'IMAGE_TIME' not in _ssi_labels.header_items(header(*_SCET[:-1]))
 

@@ -18,9 +18,11 @@ from oops.host import is_pds3_null
 # The value of a numeric VICAR keyword that the header leaves unset, such as SMRAZ
 _VICAR_FILL = -999
 
-# The year of the VICAR time fields of a frame that has no time, as in 48 of the 77
-# RAW_CAL frames of GO_0002 and GO_0003 whose labels give IMAGE_TIME = UNK
-_VICAR_NO_YEAR = -32768
+# The years of the VICAR time fields of a frame that has no time. Of the 77 RAW_CAL frames
+# of GO_0002 and GO_0003, whose labels give IMAGE_TIME = UNK, 48 (all GO_0002) write the
+# year -32768, and 29 (22 in GO_0002 and 7 in GO_0003) write all six fields as 0. Such
+# frames start at their clock count.
+_VICAR_NO_YEAR = (-32768, 0)
 
 # The orbits of the Jupiter tour, from J0 to orbit 35. The labels of GO_0003-GO_0009 and
 # GO_0016 give the ORBIT_NUMBER of every frame as two characters of its observation ID,
@@ -92,7 +94,9 @@ _TIME_ITEMS = (('IMAGE_TIME', 'SCET'), ('EARTH_RECEIVED_TIME', 'ERT'))
 # source whose value is kept for every image. An item without a rule keeps the PDS3
 # label's value. A value missing from the winning source is not a difference; the other
 # source's value is used. The counts come from comparing the two labels of all 14,672 SSI
-# products of GO_0002-GO_0023 ("of" counts the products that give the item in both), and
+# products of GO_0002-GO_0023 ("of" counts the products that give the item in both, after
+# leaving out values that both files write as 0; the differ counts and winners do not
+# depend on it), and
 # the SPICE checks evaluate the host's own kernels at each image's IMAGE_TIME. Every rule,
 # with its evidence and the images on which its source is wrong, is recorded in
 # SETI/rms-host-galileo#41.
@@ -211,7 +215,7 @@ def header_items(header):
         for FILTER_NUMBER, and PA for OBSERVATION_ID); RIM and MOD91 as
         SPACECRAFT_CLOCK_START_COUNT, written "RRRRRRRR.MM"; the SCET and ERT fields as
         IMAGE_TIME and EARTH_RECEIVED_TIME, each a ``datetime.datetime``, or neither if
-        the year is -32768; and the codes RATE and GAIN as FRAME_DURATION and
+        the year is -32768 or 0; and the codes RATE and GAIN as FRAME_DURATION and
         GAIN_MODE_ID. FILTER_NAME comes from the filter number, and EXPOSURE_TYPE from
         the last flag of MOFIBE, or of FIBE if there is no MOFIBE. MOD10, MOD8, FIBE, and
         MOFIBE keep their own names, since no PDS3 item holds them.
@@ -273,10 +277,10 @@ def _vicar_time(fields):
 
     Returns:
         datetime.datetime | None: The time, or None if the header leaves out a field or
-        gives the year -32768.
+        gives the year -32768 or 0.
     """
 
-    if None in fields or fields[0] == _VICAR_NO_YEAR:
+    if None in fields or fields[0] in _VICAR_NO_YEAR:
         return None
     (year, doy, hour, minute, second, msec) = fields
     return (dt.datetime(year, 1, 1, hour, minute, second, msec * 1000)

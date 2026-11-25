@@ -68,8 +68,9 @@ Time
 ~~~~
 
 ``IMAGE_TIME`` is the middle of the exposure. Some calibration frames of GO_0002 and
-GO_0003 have no time: the label writes ``IMAGE_TIME = UNK``, and the header writes -32768
-as the year. Their exposure starts at the time
+GO_0003 have no time: the label writes ``IMAGE_TIME = UNK``, and the header writes either
+-32768 as the year (48 frames, all in GO_0002) or 0 for all six time fields (29 frames,
+22 in GO_0002 and 7 in GO_0003). Their exposure starts at the time
 :meth:`~host_galileo.oops.ssi.GalileoSSI.tstart_from_sclk` derives from the spacecraft
 clock count, and their ``time_from_sclk`` subfield is True. An exposure of zero is kept
 as zero.
@@ -138,7 +139,7 @@ no PDS3 item holds them. Every other header value keeps its own name too.
 An item is left out of ``dict`` when no label read gives it, or when its value means
 "no value": a PDS3 null text (``UNK``, ``N/A``, ``NULL``, ``UNKNOWN``,
 ``NOT APPLICABLE``, ``---``, or an empty string, in any case), or a header value of
--999. A header that writes -32768 as the year gives no ``IMAGE_TIME``. Every other value
+-999. A header that writes -32768 or 0 as the year gives no ``IMAGE_TIME``. Every other value
 is given as the file writes it.
 
 A label's ``ORBIT_NUMBER`` outside 0 to 35, the orbits of the Jupiter tour, is left out.
@@ -235,7 +236,7 @@ rows at a time. A caller that needs ``len()`` or indexing wraps the call in ``li
   ``CUT_OUT_WINDOW``. By default it is the file beside the index whose name has
   ``_supplemental_index`` in place of ``_index``. A ``supplement`` path in any directory
   is read instead. ``supplement=None`` raises an error, and so does a supplement that
-  does not exist, unless the rows are given through ``row_dicts``.
+  does not exist.
 - Every SSI index lists its products in the same order as its supplement, so each index
   row is paired with the supplement row in the same position, and both must name the
   same file. No other column is compared, because the two tables write
@@ -280,7 +281,10 @@ Errors
 ------
 
 Every failure to read or interpret a label or an image file raises an error from
-:mod:`oops.host` that names the file:
+:mod:`oops.host` that names the file, with one exception: when ``oops.Host.from_file``
+identifies the file as a VICAR image, an image file that is shorter than its header says
+raises a :class:`ValueError` instead of ``VicarHostError``. The same file read through
+:meth:`~host_galileo.oops.ssi.GalileoSSI.from_file` raises ``VicarHostError``.
 
 .. list-table::
    :header-rows: 1

@@ -442,6 +442,9 @@ _INDEX_COLUMNS = [
     ('FRAME_DURATION', 'ASCII_REAL', 9),
 ]
 
+# The index declares a zero exposure and an IMAGE_TIME of UNK as null, as the archive does
+_INDEX_NULLS = {'EXPOSURE_DURATION': '0', 'IMAGE_TIME': '"UNK"'}
+
 INDEX_ROWS = [
     ('GO_0017', 'J0/OPNAV/C0346405900R.LBL', '03464059.00', 'GALILEO', 'SSI',
      'J0GSOPNAV115', 'GANYMEDE', '1996-06-03T17:05:38.015Z', 'CLEAR', 12.5, 8.667),
@@ -469,17 +472,19 @@ SUPPLEMENT_ROWS = [
      '03496322:00:0:0'),
 ]
 
-INDEX_KEYWORDS = {'MISSION_NAME': 'GALILEO', 'INSTRUMENT_HOST_NAME': 'GALILEO',
-                  'INSTRUMENT_ID': 'SSI'}
+INDEX_KEYWORDS: dict[str, Any] = {'MISSION_NAME': 'GALILEO',
+                                  'INSTRUMENT_HOST_NAME': 'GALILEO',
+                                  'INSTRUMENT_ID': 'SSI'}
 
 
 def write_table(directory: pathlib.Path, name: str, object_name: str,
                 columns: list[tuple[str, str, int]], rows: list[tuple[Any, ...]],
-                **keywords: Any) -> pathlib.Path:
+                nulls: dict[str, str] | None = None, **keywords: Any) -> pathlib.Path:
     """Write an ASCII PDS3 table and its label; return the label's path.
 
     An ASCII_INTEGER column holds a list of four values, each in a field of `width`
-    bytes, and declares a NULL_CONSTANT of -1; an ASCII_REAL column holds one value.
+    bytes, and declares a NULL_CONSTANT of -1; an ASCII_REAL column holds one value. A
+    column named in `nulls` declares that text as its NULL_CONSTANT.
     """
 
     def fields(value: Any, kind: str, width: int) -> list[str]:
@@ -504,6 +509,8 @@ def write_table(directory: pathlib.Path, name: str, object_name: str,
     start = 1
     for (column, kind, width) in columns:
         text += ['  OBJECT = COLUMN', f'    NAME = {column}', f'    DATA_TYPE = {kind}']
+        if nulls and column in nulls:
+            text += [f'    NULL_CONSTANT = {nulls[column]}']
         if kind == 'CHARACTER':
             text += [f'    START_BYTE = {start + 1}', f'    BYTES = {width}']
             start += width + 3
@@ -528,7 +535,7 @@ def write_index(directory: pathlib.Path, rows: list[tuple[Any, ...]] = INDEX_ROW
     """
 
     return write_table(directory, name, 'IMAGE_INDEX_TABLE', _INDEX_COLUMNS, rows,
-                       **{**INDEX_KEYWORDS, **keywords})
+                       nulls=_INDEX_NULLS, **{**INDEX_KEYWORDS, **keywords})
 
 
 def write_supplement(directory: pathlib.Path,

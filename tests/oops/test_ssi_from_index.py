@@ -30,6 +30,8 @@ def test_from_index_gives_every_row_in_order(tmp_path: pathlib.Path) -> None:
 def test_from_index_keeps_a_zero_exposure(tmp_path: pathlib.Path) -> None:
     snapshots = list(GalileoSSI.from_index(write_volume(tmp_path)))
     assert snapshots[2].texp == 0.
+    assert snapshots[2].dict['EXPOSURE_DURATION'] == 0.
+    assert snapshots[2].dict['EXPOSURE_DURATION_mask']
 
 
 def test_from_index_row_snapshot(tmp_path: pathlib.Path) -> None:
@@ -73,7 +75,7 @@ def test_from_index_keeps_the_index_value_of_a_shared_column(
     assert obs.dict['SPACECRAFT_CLOCK_START_COUNT'] == SCLK_COUNT
 
 
-def test_from_index_row_with_image_time_unk(tmp_path: pathlib.Path) -> None:
+def test_from_index_row_with_image_time_declared_null(tmp_path: pathlib.Path) -> None:
     rows = [INDEX_ROWS[0][:7] + ('UNK',) + INDEX_ROWS[0][8:]]
     write_supplement(tmp_path, SUPPLEMENT_ROWS[:1])
     obs = next(GalileoSSI.from_index(write_index(tmp_path, rows)))
@@ -119,14 +121,6 @@ def test_from_index_select(tmp_path: pathlib.Path) -> None:
     assert [type(choice) for choice in chosen] == [tuple, tuple, tuple]
     assert [len(choice) for choice in chosen] == [1, 1, 1]
     assert [choice[0].basename for choice in chosen] == BASENAMES
-
-
-def test_from_index_given_rows_need_no_supplement(tmp_path: pathlib.Path) -> None:
-    rows = [dict(row) for row in oops.Host._index_rows(write_volume(tmp_path),
-                                                       validate=())]
-    snapshots = GalileoSSI.from_index(tmp_path / 'GO_0017_index.lbl', row_dicts=rows,
-                                      supplement=None)
-    assert [obs.basename for obs in snapshots] == BASENAMES
 
 
 def test_from_index_parses_the_labels_with_the_strict_method(

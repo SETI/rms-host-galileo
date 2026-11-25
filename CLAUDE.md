@@ -97,7 +97,7 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   `_list` keys, and without an `ORBIT_NUMBER` outside 0-35. Header items are
   `VicarLabel.as_dict(unique=False)` without -999 and null texts, with each converted
   value only under its PDS3 name (`_VICAR_PDS3_PAIRS`, the clock count, the SCET/ERT
-  times as datetimes unless the year is -32768, RATE, GAIN, FILTER, and the FIBE/MOFIBE
+  times as datetimes unless the year is -32768 or 0, RATE, GAIN, FILTER, and the FIBE/MOFIBE
   exposure type). No `ORBIT_NUMBER` is derived from a header. `merge_items()` keeps the
   source that `_RULES` names for an item both give, or the label for an item without a
   rule. Each rule carries its evidence and cites the label-differences issue
@@ -112,9 +112,8 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   streams both tables and pairs them by position (`MERGE_SUPPLEMENT_BY_FILE = False`),
   checking that each pair names the same file. It passes `validate=()`, because the
   supplement writes `SPACECRAFT_CLOCK_START_COUNT` in SPICE form and the index in label
-  form. The supplement is required: `supplement=None` raises `HostIndexError` unless
-  `row_dicts` is given, and a missing supplement, default or explicit, raises
-  `FileNotFoundError`. Each row is used
+  form. The supplement is required: `supplement=None` raises `HostIndexError`, and a
+  missing supplement, default or explicit, raises `FileNotFoundError`. Each row is used
   as the table gives it, `_mask` entries included; a `CUT_OUT_WINDOW` of -1s means no
   window. `filepath` is the relative `VOLUME_ID/FILE_SPECIFICATION_NAME`. The method
   returns a generator expression, so its call-time errors are raised at once.

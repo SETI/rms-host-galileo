@@ -238,6 +238,29 @@ def test_label_image_time_unk_starts_from_the_clock(tmp_path: pathlib.Path) -> N
     assert obs.time_from_sclk is True
 
 
+# The six SCET fields of a RAW_CAL header that writes no time
+_ZERO_TIME: dict[str, Any] = dict.fromkeys(
+    ('SCETYEAR', 'SCETDAY', 'SCETHOUR', 'SCETMIN', 'SCETSEC', 'SCETMSEC'), 0)
+
+
+def test_label_image_time_unk_with_all_zero_header_starts_from_the_clock(
+        tmp_path: pathlib.Path) -> None:
+    path = write_product(tmp_path, IMAGE_TIME='UNK', header=_ZERO_TIME)
+    obs = GalileoSSI.from_file(path)
+    assert obs.time[0] == pytest.approx(fake_scs2e(-77, '3496321:0:0:0') + 1.150,
+                                        abs=1.e-6)
+    assert obs.time_from_sclk is True
+
+
+def test_image_file_with_all_zero_time_starts_from_the_clock(
+        tmp_path: pathlib.Path) -> None:
+    path = write_vicar_image(tmp_path, **_ZERO_TIME)
+    obs = GalileoSSI.from_file(path, astrometry=True)
+    assert obs.time[0] == pytest.approx(fake_scs2e(-77, '3496321:0:0:0') + 1.150,
+                                        abs=1.e-6)
+    assert obs.time_from_sclk is True
+
+
 def test_image_file_without_a_time_starts_from_the_clock(tmp_path: pathlib.Path) -> None:
     # A phase-1 header: FIBE marks the exposure EXTENDED and RATE 3 gives 30.333 s
     path = write_vicar_image(tmp_path, SCETYEAR=-32768, RIM=2492218, MOFIBE=None,
