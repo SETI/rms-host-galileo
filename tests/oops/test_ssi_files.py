@@ -39,7 +39,7 @@ def load(source: str) -> Any:
 
 
 def test_index_reads_every_row() -> None:
-    assert len(GalileoSSI.from_index(INDEX)) == INDEX_ROWS
+    assert len(list(GalileoSSI.from_index(INDEX))) == INDEX_ROWS
 
 
 def test_index_merges_the_supplement() -> None:
