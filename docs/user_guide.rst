@@ -235,7 +235,7 @@ rows at a time. A caller that needs ``len()`` or indexing wraps the call in ``li
   ``CUT_OUT_WINDOW``. By default it is the file beside the index whose name has
   ``_supplemental_index`` in place of ``_index``. A ``supplement`` path in any directory
   is read instead. ``supplement=None`` raises an error, and so does a supplement that
-  does not exist.
+  does not exist, unless the rows are given through ``row_dicts``.
 - Every SSI index lists its products in the same order as its supplement, so each index
   row is paired with the supplement row in the same position, and both must name the
   same file. No other column is compared, because the two tables write

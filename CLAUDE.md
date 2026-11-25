@@ -112,8 +112,9 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   streams both tables and pairs them by position (`MERGE_SUPPLEMENT_BY_FILE = False`),
   checking that each pair names the same file. It passes `validate=()`, because the
   supplement writes `SPACECRAFT_CLOCK_START_COUNT` in SPICE form and the index in label
-  form. The supplement is required: `supplement=None` raises `HostIndexError`, and a
-  missing supplement, default or explicit, raises `FileNotFoundError`. Each row is used
+  form. The supplement is required: `supplement=None` raises `HostIndexError` unless
+  `row_dicts` is given, and a missing supplement, default or explicit, raises
+  `FileNotFoundError`. Each row is used
   as the table gives it, `_mask` entries included; a `CUT_OUT_WINDOW` of -1s means no
   window. `filepath` is the relative `VOLUME_ID/FILE_SPECIFICATION_NAME`. The method
   returns a generator expression, so its call-time errors are raised at once.

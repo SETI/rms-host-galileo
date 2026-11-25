@@ -633,14 +633,14 @@ class GalileoSSI(oops.Host):
 
         Raises:
             TypeError: At call time, if a keyword argument is not one of those listed.
-            oops.host.HostIndexError: At call time, if `supplement` is None, if
-                `supplement` is `oops.Host.SUPPLEMENT` and the name of `filepath`
-                contains no "_index", or if either label does not describe a table that
-                can be read. When the iteration reaches a row, if the index row and the
-                supplement row in the same position give different files, or if the
-                supplement ends before the index; after the last index row, if the
-                supplement has rows left over. The table reader raises it for a table
-                file that does not hold the rows its label describes.
+            oops.host.HostIndexError: At call time, if `supplement` is None while
+                `row_dicts` is not given, if `supplement` is `oops.Host.SUPPLEMENT` and
+                the name of `filepath` contains no "_index", or if either label does not
+                describe a table that can be read. When the iteration reaches a row, if
+                the index row and the supplement row in the same position give different
+                files, or if the supplement ends before the index; after the last index
+                row, if the supplement has rows left over. The table reader raises it for
+                a table file that does not hold the rows its label describes.
             oops.host.HostFormatError: When the iteration reaches a row whose time must
                 come from the spacecraft clock count while its FRAME_DURATION is not one
                 of the SSI frame durations.
@@ -654,7 +654,7 @@ class GalileoSSI(oops.Host):
                 if a table file does not exist or cannot be read.
         """
 
-        if supplement is None:
+        if supplement is None and row_dicts is None:
             raise oops.host.HostIndexError(f'Galileo SSI index needs its supplemental '
                                            f'index: {filepath}')
 

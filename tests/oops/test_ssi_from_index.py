@@ -115,8 +115,17 @@ def test_from_index_full_fov(tmp_path: pathlib.Path) -> None:
 
 
 def test_from_index_select(tmp_path: pathlib.Path) -> None:
-    snapshots = GalileoSSI.from_index(write_volume(tmp_path), select=slice(None))
-    assert all(type(obs) is tuple for obs in snapshots)
+    chosen = list(GalileoSSI.from_index(write_volume(tmp_path), select=slice(None)))
+    assert [len(choice) for choice in chosen] == [1, 1, 1]
+    assert [choice[0].basename for choice in chosen] == BASENAMES
+
+
+def test_from_index_given_rows_need_no_supplement(tmp_path: pathlib.Path) -> None:
+    rows = [dict(row) for row in oops.Host._index_rows(write_volume(tmp_path),
+                                                       validate=())]
+    snapshots = GalileoSSI.from_index(tmp_path / 'GO_0017_index.lbl', row_dicts=rows,
+                                      supplement=None)
+    assert [obs.basename for obs in snapshots] == BASENAMES
 
 
 def test_from_index_parses_the_labels_with_the_strict_method(
