@@ -293,6 +293,7 @@ def test_select_gives_the_snapshot(tmp_path: pathlib.Path, select: Any) -> None:
 def test_select_slice_gives_a_tuple(tmp_path: pathlib.Path) -> None:
     chosen = GalileoSSI.from_file(write_vicar_image(tmp_path), astrometry=True,
                                   select=slice(None))
+    assert type(chosen) is tuple
     assert len(chosen) == 1
     assert chosen[0].basename == 'C0349632100R.IMG'
 

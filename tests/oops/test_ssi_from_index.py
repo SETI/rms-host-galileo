@@ -116,6 +116,7 @@ def test_from_index_full_fov(tmp_path: pathlib.Path) -> None:
 
 def test_from_index_select(tmp_path: pathlib.Path) -> None:
     chosen = list(GalileoSSI.from_index(write_volume(tmp_path), select=slice(None)))
+    assert [type(choice) for choice in chosen] == [tuple, tuple, tuple]
     assert [len(choice) for choice in chosen] == [1, 1, 1]
     assert [choice[0].basename for choice in chosen] == BASENAMES
 
