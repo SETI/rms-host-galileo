@@ -18,6 +18,21 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 VENV="${VENV:-${VENV_PATH:-$PROJECT_ROOT/venv}}"
+# The checks run from the project root, so a relative VENV names a directory there
+case "$VENV" in
+    /* | [A-Za-z]:*) ;;
+    *) VENV="$PROJECT_ROOT/$VENV" ;;
+esac
+
+# The activate script of $VENV: in bin/, or in Scripts/ for a native Windows Python
+venv_activate_path() {
+    if [ ! -f "$VENV/bin/activate" ] && [ -f "$VENV/Scripts/activate" ]; then
+        echo "$VENV/Scripts/activate"
+    else
+        echo "$VENV/bin/activate"
+    fi
+}
+VENV_ACTIVATE="$(venv_activate_path)"
 DOCS_DIR="$PROJECT_ROOT/docs"
 HTML_INDEX="$DOCS_DIR/_build/html/index.html"
 
@@ -27,12 +42,6 @@ if [ ! -d "$DOCS_DIR" ]; then
     echo "Error: docs directory not found at $DOCS_DIR" >&2
     exit 1
 fi
-
-# A virtualenv created by a native Windows Python keeps its scripts in Scripts/, not bin/.
-case "$(uname -s)" in
-    CYGWIN* | MINGW* | MSYS*) VENV_ACTIVATE="$VENV/Scripts/activate" ;;
-    *)                        VENV_ACTIVATE="$VENV/bin/activate" ;;
-esac
 
 if [ ! -f "$VENV_ACTIVATE" ]; then
     echo "Error: virtual environment not found at $VENV" >&2
