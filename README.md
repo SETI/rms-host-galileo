@@ -61,31 +61,36 @@ import host_galileo.oops
 obs = oops.Host.from_file('GO_0017/G1/GANYMEDE/C0349632100R.LBL')
 ```
 
-The host class can also be used directly. It reads a volume index together with the
-supplemental index beside it (here `GO_0017_supplemental_index.lbl`), which must exist:
+The host class can also be used directly. It reads a metadata index together with the
+supplemental index beside it (here `GO_0017_supplemental_index.lbl`), which must exist,
+and returns an iterator over the rows:
 
 ```python
 from host_galileo import GalileoSSI
 
 snapshot = GalileoSSI.from_file('GO_0017/G1/GANYMEDE/C0349632100R.IMG')
-snapshots = GalileoSSI.from_index('GO_0017_index.lbl')
+for snapshot in GalileoSSI.from_index('GO_0017_index.lbl'):
+    ...
 ```
 
 # Features
 
-- `GalileoSSI.from_file()` makes a `Snapshot` from an SSI image. The image and field of
-  view are trimmed to the cutout window given in the label unless `full_fov=True`, and
-  `astrometry=True` reads no image data.
-- `GalileoSSI.from_index()` makes one `Snapshot` for each row of a volume index,
+- `GalileoSSI.from_file()` makes a `Snapshot` from an SSI image, given either its PDS3
+  label or its VICAR image file. Given the image file, only that file is read; given the
+  label, the image file is read as well, unless `astrometry=True`. The metadata of both
+  labels are merged into one dictionary, with each item taken from one fixed label.
+- The image and field of view are trimmed to the cutout window unless `full_fov=True`.
+- `GalileoSSI.from_index()` yields one `Snapshot` for each row of a metadata index,
   including rows with a zero exposure. It merges in the columns of the supplemental
-  index, matching its rows to the index's by VOLUME_ID and FILE_SPECIFICATION_NAME.
-- The exposure is centered on the label's IMAGE_TIME. When the label gives none, the
-  time comes from the spacecraft clock count and the shutter delay for the frame
-  duration.
+  index, whose rows it pairs with the index's by position.
+- The exposure is centered on IMAGE_TIME. When there is none, the start comes from the
+  spacecraft clock count and the shutter delay for the frame duration, which
+  `GalileoSSI.tstart_from_sclk()` also gives on its own.
 - A target named in the label is repaired where the label is known to be wrong, and an
   image of a star uses that star as its light source.
 
 Details are available in the
+[user guide](https://rms-host-galileo.readthedocs.io/en/latest/user_guide.html) and the
 [module documentation](https://rms-host-galileo.readthedocs.io/en/latest/module.html).
 
 # Contributing

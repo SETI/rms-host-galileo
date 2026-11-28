@@ -9,6 +9,12 @@ Welcome to the Documentation for rms-host-galileo!
 
 .. toctree::
    :maxdepth: 2
+   :caption: User Guide:
+
+   user_guide
+
+.. toctree::
+   :maxdepth: 2
    :caption: API Reference:
 
    module

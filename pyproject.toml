@@ -9,13 +9,13 @@ description = "Galileo mission host (SSI) for the OOPS observation geometry tool
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-  "cspyce>=2.3.2",          # 2.3.2 is the first with Python 3.13 wheels
+  "cspyce>=2.3.2",
   "numpy>=2.0",
   "rms-filecache>=2.0.3",
-  "rms-julian>=3.0.2",      # 3.0.2 drops pyparsing's deprecated camelCase API
-  "rms-oops>=0.4.0",        # 0.4.0 adds the oops.Host API; also provides spicedb
-  "rms-pdsparser>=2.3.0",   # 2.3.0 adds as_dict
-  "rms-vicar>=1.4.0",       # 1.4.0 adds as_dict
+  "rms-julian>=3.0.2",
+  "rms-oops @ git+https://github.com/SETI/rms-oops.git@rf_261124_host_contract",
+  "rms-pdsparser>=2.3.0",
+  "rms-vicar>=1.4.0",
 ]
 license = "Apache-2.0"
 authors = [
@@ -123,14 +123,15 @@ strict = true
 # every other module is excluded from discovery; the override below keeps mypy from
 # following an import into one of them.
 exclude = [
-  'host_galileo/oops/(_galileo|ssi)\.py$',
+  'host_galileo/oops/(_galileo|_ssi_labels|ssi)\.py$',
 ]
 
 # src is deliberately unannotated (see .claude/rules/python.md). The published type
 # information lives in the stubs of host_galileo and host_galileo.oops; every other module
 # has no stub, so mypy treats what the tests import from it as Any.
 [[tool.mypy.overrides]]
-module = ["host_galileo._version", "host_galileo.oops._galileo", "host_galileo.oops.ssi"]
+module = ["host_galileo._version", "host_galileo.oops._galileo",
+          "host_galileo.oops._ssi_labels", "host_galileo.oops.ssi"]
 follow_imports = "skip"
 ignore_errors = true
 
@@ -143,7 +144,8 @@ ignore_missing_imports = true
 #     by insert_subfield(), so no declaration of them can exist.
 #   - The oops stub declares oops.host.Host but not its re-export as oops.Host.
 [[tool.mypy.overrides]]
-module = ["conftest", "test_galileo", "test_ssi"]
+module = ["conftest", "test_galileo", "test_ssi", "test_ssi_from_file",
+          "test_ssi_from_index", "test_ssi_files"]
 disable_error_code = ["attr-defined"]
 
 [tool.ruff]

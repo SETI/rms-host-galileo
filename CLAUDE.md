@@ -29,16 +29,21 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   (`-W -n`), codespell and PyMarkdown. `ruff format` is disabled.
   `.github/workflows/run-tests.yml` runs the same set. `scripts/setup-venv.sh` builds the
   `venv/` that the scripts expect; set `VENV` to use another.
-- The `oops.Host` API first appears in rms-oops 0.4.0, the minimum version in
-  `pyproject.toml`.
+- The host needs the `oops.Host` support methods of the rms-oops host contract
+  (`_index_rows`, `_set_path_attributes`, the new `_apply_overrides`), which are not
+  released yet, so `pyproject.toml` installs rms-oops from that PR branch through a git
+  URL. Restore a version floor once rms-oops is released.
 - The type information is published in two stubs: `host_galileo/__init__.pyi` declares
   `GalileoSSI` in full, and `host_galileo/oops/__init__.pyi` re-exports it. `stubtest`
   checks them against the runtime in the check script and in CI, so adding, renaming or
   re-signing a public member means updating `host_galileo/__init__.pyi` in the same
   change. The `[tool.mypy] exclude`, the override list in `pyproject.toml` and
-  `.stubtest-allowlist` keep it off the stub-less modules. The two `type: ignore[override]`
-  comments are real mismatches with `oops.Host`: `from_file` names its first parameter
-  `fileinfo`, and `from_index` returns `list[Snapshot]`.
+  `.stubtest-allowlist` keep it off the stub-less modules (`_galileo.py`,
+  `_ssi_labels.py` and `ssi.py`). `from_file` and `from_index` are each published as two
+  overloads, one without `select` that returns the narrower type. The two
+  `type: ignore[override]` comments are real mismatches with `oops.Host`: `from_file`
+  names its first parameter `fileinfo`, neither method takes the `**kwargs` that
+  `oops.Host` declares, and the results are typed more narrowly.
 - `docs/conf.py` resolves the short class names in docstrings (`FCPath`, `Observation`,
   ...) through intersphinx with `_SHORT_NAMES`. Add a name there when a nitpicky build
   reports a class from another RMS package.
@@ -49,7 +54,12 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
 - Tests never touch SPICE kernels or spicedb. `tests/oops/conftest.py` replaces them with
   fakes for every test, so new tests get this automatically. Unlike Cassini, Galileo
   furnishes a fixed kernel list through the SPICE file cache; the fakes make the cache
-  return paths unread and record what `cspyce.furnsh` is given.
+  return paths unread and record what `cspyce.furnsh` is given. `fake_spice` also copies
+  the oops Path and Frame registries, caches, and each class's waypoint and wayframe
+  pools for every test, as rms-host-new-horizons does, until oops has one helper for it.
+  The writers at the end of the conftest build small synthetic products (a VICAR image
+  and its PDS3 label) and an index with its supplement; no test reads archive files, and
+  the cut-down files in `test_files` are part of the repository.
 
 ## Architecture gotchas
 
@@ -65,25 +75,54 @@ and keep them in step with rms-host-cassini. The rules' references to the two pu
   monthly CK/SPK machinery that Cassini uses, but every month is marked loaded and
   `load_kernels()` furnishes a fixed list (`_KERNELS`) instead. `tdb_from_sclk()` loads
   only the leap-second and clock kernels, so it works without `initialize()`.
-- The metadata of a VICAR image come from its own header: `_vicar_to_pds3()` copies
-  each value under its PDS3 keyword name and builds the clock count, `IMAGE_TIME` and
-  `FILTER_NAME` from the VICAR fields. No detached `.LBL` is read.
-- `IMAGE_TIME` is the middle of the exposure. When it is `UNK`, the start time comes from
-  `SPACECRAFT_CLOCK_START_COUNT` plus the shutter delay for the `FRAME_DURATION`
-  (`_SHUTTER_DELAY`), one frame earlier for an `EXTENDED` exposure.
-- An SSI supplemental index writes `SPACECRAFT_CLOCK_START_COUNT` in SPICE form and the
-  index in label form, so the default validation of `oops.Host._read_index_rows()`, which
-  compares every shared column, rejects every real pair. `GalileoSSI.from_index()` passes
-  `validate=_INDEX_KEYS` to match rows on `VOLUME_ID` and `FILE_SPECIFICATION_NAME`
-  instead. Unless one is given, it reads the supplement beside the index
-  (`oops.Host.SUPPLEMENT`), which must exist: an index without one raises
-  `FileNotFoundError`. Index values win the merge, so the clock count stays in label
-  form. `_read_index_rows()` is a classmethod that raises `WrongHostError` for another
-  host's index, so call it through `GalileoSSI`.
-  `oops.Host.from_index()` reads the rows itself with the default validation, so it still
-  fails on any index whose supplement sits beside it.
-- The hosts apply the standard overrides through `oops.Host._apply_overrides()`, passing
-  them to `_make_snapshot()` as one `overrides` dict, as rms-host-cassini does.
+- What `from_file()` reads follows the rules all four host packages share. Given the
+  VICAR image, only that file is read: its header, plus its array unless `astrometry` is
+  True. Given the PDS3 label (a name ending in `.lbl`), the label is parsed with the
+  strict method (`_PDS3_DEFAULTS`, which the caller's `pds3_options` update), and unless
+  `astrometry` is True the image file that `^IMAGE` names is found case-tolerantly
+  through oops's `_resolve_pds3_filename` and read. One `VicarImage` read gives both the
+  header and the array, laid out by the VICAR header, never by the record in `^IMAGE`
+  (52 GO_0019 labels put it one record early). The header is read with the loose VICAR
+  reader (`strict=False`).
+- Every label and image read of `from_file()` goes through `_read_product()`, which turns
+  each failure to read or interpret either file into `PdsHostError`, `VicarHostError` or
+  `HostFormatError` naming the file. Interpretation (`_ssi_labels` and `_interpret()`) is
+  plain Python with no SPICE call, so the `KeyError`, `TypeError` and `ValueError` it
+  catches come from the files; the clock conversion runs later, in `_make_snapshot()`,
+  so a cspyce error keeps its SPICE code. It also checks that the array has the
+  dimensions the label gives it. Index rows get no checks.
+- `_ssi_labels.py` turns each source into metadata items and merges them. Label items
+  are `Pds3Label.as_dict()` without None values and PDS3 null texts
+  (`oops.host.is_pds3_null()`), with `CUT_OUT_WINDOW` and `TRUTH_WINDOW` from their
+  `_list` keys, and without an `ORBIT_NUMBER` outside 0-35. Header items are
+  `VicarLabel.as_dict(unique=False)` without -999 and null texts, with each converted
+  value only under its PDS3 name (`_VICAR_PDS3_PAIRS`, the clock count, the SCET/ERT
+  times as datetimes unless the year is -32768 or 0, RATE, GAIN, FILTER, and the FIBE/MOFIBE
+  exposure type). No `ORBIT_NUMBER` is derived from a header. `merge_items()` keeps the
+  source that `_RULES` names for an item both give, or the label for an item without a
+  rule. Each rule carries its evidence and cites the label-differences issue
+  (SETI/rms-host-galileo#41), which stays open. `label_dict` and `header_dict` are the
+  parsers' dictionaries as they come.
+- `IMAGE_TIME` is the middle of the exposure. Without it (absent from merged metadata,
+  or a null text in an index row), the start comes from the public
+  `GalileoSSI.tstart_from_sclk()`: `SPACECRAFT_CLOCK_START_COUNT` plus the shutter delay
+  for the `FRAME_DURATION` (`_SHUTTER_DELAY`), one frame earlier for an `EXTENDED`
+  exposure before `_PHASE2_FIRST_RIM`. It loads only the leap-second and clock kernels.
+- `GalileoSSI.from_index()` reads the index through `oops.Host._index_rows()`, which
+  streams both tables and pairs them by position (`MERGE_SUPPLEMENT_BY_FILE = False`),
+  checking that each pair names the same file. It passes `validate=()`, because the
+  supplement writes `SPACECRAFT_CLOCK_START_COUNT` in SPICE form and the index in label
+  form. The supplement is required: `supplement=None` raises `HostIndexError`, and a
+  missing supplement, default or explicit, raises `FileNotFoundError`. Each row is used
+  as the table gives it, `_mask` entries included; a `CUT_OUT_WINDOW` of -1s means no
+  window. `filepath` is the relative `VOLUME_ID/FILE_SPECIFICATION_NAME`. The method
+  returns a generator expression, so its call-time errors are raised at once.
+- The file subfields come from `oops.Host._set_path_attributes()`, called after `data` is
+  inserted. The standard overrides go through `oops.Host._apply_overrides()`, passed to
+  `_make_snapshot()` as one `overrides` dict, and `select` through
+  `oops.Host._apply_select()`, as from a tuple holding the one Snapshot.
+- No pointing is checked: a gap in the C kernels shows up as the cspyce error when the
+  frame is used.
 - TARGET_NAME repairs and the star targets that become light sources are in `ssi.py`
   (`_TARGET_NAME_REPAIRS`, `_TARGET_STARS`).
 - Running anything needs SPICE kernels: the fixed list is read through
