@@ -184,10 +184,11 @@ class GalileoSSI(oops.Host):
                 as a Pds3Label, VicarLabel, or VicarImage. A path whose name ends in
                 ".lbl", in any case, is a PDS3 label; any other path is a VICAR image
                 file.
-            full_fov (bool, optional): If True, the full 800x800 image and its FOV are
-                returned, and the `window` subfield gives the bounds of the cutout
-                window; otherwise, the image is trimmed to the cutout window and the FOV
-                is a SliceFOV of that window.
+            full_fov (bool, optional): If True, the full image and its FOV are
+                returned, 800x800 or, for the summed formats AI8 and HIS, 400x400, and the
+                `window` subfield gives the bounds of the cutout window; otherwise, the
+                image is trimmed to the cutout window and the FOV is a SliceFOV of that
+                window.
             return_all_planets (bool, optional): Include kernels for all planets, not just
                 the target of the mission phase.
             pds3_options (dict[str, Any], optional): Any keyword arguments and their
@@ -256,7 +257,8 @@ class GalileoSSI(oops.Host):
             - `host` ("Galileo"), `instrument` ("SSI"), `time_from_sclk` (True if no
               IMAGE_TIME was read, so that the time comes from the spacecraft clock
               count), `window` (the cutout window as zero-based line and sample limits
-              ``[l0, s0, l1, s1]``, or the full 800x800 frame if there is none), and
+              ``[l0, s0, l1, s1]``, or the full image, 800x800 or 400x400 for a summed
+              format, if there is none), and
               `full_fov`.
             - `filter` (FILTER_NAME), `label_target` (TARGET_NAME), `observation_id`
               (OBSERVATION_ID), and `spacecraft_clock_start_count`
@@ -787,10 +789,11 @@ class GalileoSSI(oops.Host):
             dict_ (dict): The merged metadata of an image, or an index row merged with
                 its supplement row.
             inputs (_Inputs): The inputs that :meth:`_interpret` takes from `dict_`.
-            data (numpy.ndarray | None): The full image array; None to omit the `data`
-                subfield.
-            full_fov (bool): True to keep the full FOV and image; False to trim both to
-                the cutout window.
+            data (numpy.ndarray | None): The image file's whole array; None to omit the
+                `data` subfield. It is cut to the FOV of the telemetry format, 400x400
+                for a summed format.
+            full_fov (bool): True to keep the format's full FOV and image; False to trim
+                both to the cutout window.
             return_all_planets (bool): Include kernels for all planets, not just the
                 target of the mission phase.
             overrides (dict[str, Any]): The values of the standard overrides, `target`,
@@ -813,10 +816,16 @@ class GalileoSSI(oops.Host):
         if using_cks:
             GalileoSSI._define_camera_frame()
 
-        # Trim the FOV and data array to the cutout window if necessary
+        # The array is cut to the FOV of the telemetry format: a summed image (AI8 or HIS)
+        # fills only the first 400 lines and samples of its 800x800 array
         default_fov = inputs.fov
+        (samples, lines) = (int(n) for n in default_fov.uv_shape.vals)
+        if data is not None:
+            data = data[:lines, :samples]
+
+        # Trim the FOV and data array to the cutout window if necessary
         if inputs.window is None:
-            window = [0, 0, _SSI_PIXELS, _SSI_PIXELS]
+            window = [0, 0, lines, samples]
         else:
             window = inputs.window
             if not full_fov:

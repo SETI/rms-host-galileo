@@ -12,7 +12,7 @@ import numpy as np
 import oops
 import pytest
 import vicar
-from conftest import (EXPOSURE_MS, SCLK_COUNT, SSI_PIXELS, fake_scs2e, image_array,
+from conftest import (EXPOSURE_MS, SCLK_COUNT, SUMMED_PIXELS, fake_scs2e, image_array,
                       write_pds3_label, write_product, write_text, write_vicar_image)
 from pdsparser import Pds3Label
 
@@ -75,10 +75,25 @@ def test_label_reads_the_window_in_label_order(tmp_path: pathlib.Path) -> None:
     assert obs.data[0, 0] == image_array()[0, 1]
 
 
-def test_full_fov_gives_the_full_array(tmp_path: pathlib.Path) -> None:
+def test_full_fov_gives_the_summed_image(tmp_path: pathlib.Path) -> None:
     obs = GalileoSSI.from_file(write_product(tmp_path), full_fov=True)
-    assert obs.data.shape == (SSI_PIXELS, SSI_PIXELS)
     assert obs.fov is GalileoSSI._FOVS['HIS']
+    assert np.array_equal(obs.data, image_array()[:SUMMED_PIXELS, :SUMMED_PIXELS])
+
+
+def test_full_fov_gives_the_full_array_of_a_full_format(tmp_path: pathlib.Path) -> None:
+    path = write_product(tmp_path, TELEMETRY_FORMAT_ID='IM8', header={'TLMFMT': 'IM8'})
+    obs = GalileoSSI.from_file(path, full_fov=True)
+    assert obs.fov is GalileoSSI._FOVS['IM8']
+    assert np.array_equal(obs.data, image_array())
+
+
+@pytest.mark.parametrize('full_fov', [True, False])
+def test_summed_image_without_a_window(tmp_path: pathlib.Path, full_fov: bool) -> None:
+    path = write_product(tmp_path, CUT_OUT_WINDOW=None, header={'CUT_OUT_WINDOW': None})
+    obs = GalileoSSI.from_file(path, full_fov=full_fov)
+    assert obs.data.shape == (SUMMED_PIXELS, SUMMED_PIXELS)
+    assert obs.window == [0, 0, SUMMED_PIXELS, SUMMED_PIXELS]
 
 
 def test_label_astrometry_reads_no_image_file(tmp_path: pathlib.Path) -> None:

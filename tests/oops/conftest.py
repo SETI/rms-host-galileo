@@ -32,6 +32,10 @@ SSI_FOCAL_LENGTH = 1501.039         # mm
 SSI_PIXEL_SIZE = 15.24e-3           # mm
 SSI_PIXELS = 800
 
+# The lines and samples of a summed image (AI8 and HIS), which fills that many of the
+# first lines and samples of its 800x800 array
+SUMMED_PIXELS = 400
+
 # The fake spacecraft clock: one RIM count is one 60.667 s frame of the mod-91 counter,
 # starting at SCLK_EPOCH
 SCLK_EPOCH = julian.tdb_from_iso('1989-10-18T00:00:00')

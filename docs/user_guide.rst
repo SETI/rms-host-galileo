@@ -59,10 +59,15 @@ The cutout window
 Many SSI images hold data only inside a cutout window, given by ``CUT_OUT_WINDOW`` as the
 first line, first sample, number of lines, and number of samples, counted from one. By
 default the array is trimmed to that window and the field of view is the matching slice
-of the camera's. With ``full_fov=True``, the full 800x800 array and field of view are
-returned instead. Either way, the ``window`` subfield gives the window as zero-based
-line and sample limits, ``[l0, s0, l1, s1]``, or ``[0, 0, 800, 800]`` for an image with
-no window.
+of the camera's. With ``full_fov=True``, the full image and field of view are returned
+instead. Either way, the ``window`` subfield gives the window as zero-based line and
+sample limits, ``[l0, s0, l1, s1]``, or the full image for an image with no window.
+
+The full image is 800x800, except in the summed telemetry formats ``AI8`` and ``HIS``,
+whose pixels each sum 2x2 pixels of the CCD. Such an image is 400x400, with a field of
+view of the same size, and its window counts summed pixels. Its image file holds an
+800x800 array whose first 400 lines and samples are the image; the host returns only
+that part.
 
 Time
 ~~~~

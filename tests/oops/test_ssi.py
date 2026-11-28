@@ -16,8 +16,8 @@ import numpy as np
 import oops
 import pytest
 from conftest import (EXPOSURE_MS, IMAGE_TIME, SCLK_COUNT, SSI_DISTORTION,
-                      SSI_FOCAL_LENGTH, SSI_PIXEL_SIZE, SSI_PIXELS, FakeSpice,
-                      FakeSpiceDB, fake_scs2e, image_array, label_dict)
+                      SSI_FOCAL_LENGTH, SSI_PIXEL_SIZE, SSI_PIXELS, SUMMED_PIXELS,
+                      FakeSpice, FakeSpiceDB, fake_scs2e, image_array, label_dict)
 
 import host_galileo
 import host_galileo.oops
@@ -422,7 +422,7 @@ def test_snapshot_cutout_window_trims_the_fov() -> None:
 def test_snapshot_without_cutout_window(window: list[int] | None) -> None:
     obs = snapshot(CUT_OUT_WINDOW=window)
     assert obs.fov is GalileoSSI._FOVS['HIS']
-    assert obs.window == [0, 0, SSI_PIXELS, SSI_PIXELS]
+    assert obs.window == [0, 0, SUMMED_PIXELS, SUMMED_PIXELS]
 
 
 def test_snapshot_full_fov_keeps_the_full_fov_and_gives_the_window() -> None:
@@ -437,9 +437,9 @@ def test_snapshot_trims_the_data() -> None:
     assert np.array_equal(obs.data, image_array()[1:400, 0:392])
 
 
-def test_snapshot_full_fov_keeps_the_data() -> None:
+def test_snapshot_full_fov_gives_the_summed_image() -> None:
     obs = make_snapshot(label_dict(), data=image_array(), full_fov=True)
-    assert obs.data.shape == (SSI_PIXELS, SSI_PIXELS)
+    assert np.array_equal(obs.data, image_array()[:SUMMED_PIXELS, :SUMMED_PIXELS])
 
 
 @pytest.mark.parametrize(('label_target', 'target'), [
